@@ -1,23 +1,43 @@
+import { useMemo, useState, type CSSProperties } from 'react'
 import './App.css'
 
 type Player = 'blue' | 'orange'
 
-type Piece = {
+type Direction = 'up' | 'down' | 'left' | 'right'
+
+type Anchor = {
+  id: number
   x: number
   y: number
   player: Player
-  stems: Array<'up' | 'down' | 'left' | 'right'>
+  stems: Direction[]
+}
+
+type Position = {
+  x: number
+  y: number
+}
+
+type Offset = {
+  dx: number
+  dy: number
+  dir?: Direction
 }
 
 const gridSize = 10
 
-const pieces: Piece[] = [
-  { x: 2, y: 2, player: 'blue', stems: ['up', 'right'] },
-  { x: 4, y: 2, player: 'orange', stems: ['left', 'down'] },
-  { x: 6, y: 3, player: 'blue', stems: ['left', 'right', 'down'] },
-  { x: 3, y: 5, player: 'orange', stems: ['up'] },
-  { x: 7, y: 6, player: 'blue', stems: [] },
-  { x: 5, y: 7, player: 'orange', stems: ['up', 'left', 'right'] },
+const directions: Offset[] = [
+  { dx: 0, dy: -1, dir: 'up' },
+  { dx: 0, dy: 1, dir: 'down' },
+  { dx: -1, dy: 0, dir: 'left' },
+  { dx: 1, dy: 0, dir: 'right' },
+]
+
+const diagonals: Offset[] = [
+  { dx: -1, dy: -1 },
+  { dx: 1, dy: -1 },
+  { dx: -1, dy: 1 },
+  { dx: 1, dy: 1 },
 ]
 
 const cells = Array.from({ length: gridSize * gridSize }, (_, index) => {
@@ -26,7 +46,38 @@ const cells = Array.from({ length: gridSize * gridSize }, (_, index) => {
   return { x, y }
 })
 
+const initialAnchors: Anchor[] = []
+
 function App() {
+  const [anchors, setAnchors] = useState<Anchor[]>(initialAnchors)
+  const [nextId, setNextId] = useState(1)
+  const [activePlayer, setActivePlayer] = useState<Player>('blue')
+  const [selected, setSelected] = useState<Position | null>(null)
+
+  const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
+  const openCount = gridSize * gridSize - occupancy.size
+  const isOver = openCount === 0
+  const scores = useMemo(() => scoreAnchors(anchors), [anchors])
+
+  const handleCellClick = (cell: Position) => {
+    if (isOver) return
+    if (!isOpen(cell, occupancy)) return
+    setSelected(cell)
+  }
+
+  const handleConfirm = () => {
+    if (!selected || isOver) return
+    const updated = applyMove(anchors, selected, activePlayer, nextId)
+    setAnchors(updated.anchors)
+    setNextId(updated.nextId)
+    setSelected(null)
+    setActivePlayer(activePlayer === 'blue' ? 'orange' : 'blue')
+  }
+
+  const handleUndo = () => {
+    setSelected(null)
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -39,12 +90,13 @@ function App() {
           <div>
             <p className="label">Active Player</p>
             <p className="value">
-              Blue <span className="dot blue" />
+              {activePlayer === 'blue' ? 'Blue' : 'Orange'}
+              <span className={`dot ${activePlayer}`} />
             </p>
           </div>
           <div>
             <p className="label">Phase</p>
-            <p className="value">Select a square</p>
+            <p className="value">{isOver ? 'Game Over' : selected ? 'Confirm move' : 'Select a square'}</p>
           </div>
         </div>
       </header>
@@ -55,29 +107,42 @@ function App() {
             <div className="score blue">
               <span className="dot" />
               <span>Blue</span>
-              <strong>18</strong>
+              <strong>{scores.blue}</strong>
             </div>
             <div className="score orange">
               <span className="dot" />
               <span>Orange</span>
-              <strong>22</strong>
+              <strong>{scores.orange}</strong>
             </div>
           </div>
 
           <div className="board" style={{ ['--size' as string]: gridSize }}>
             {cells.map((cell) => {
-              const piece = pieces.find((p) => p.x === cell.x && p.y === cell.y)
+              const piece = anchors.find((p) => p.x === cell.x && p.y === cell.y)
+              const isSelected = selected && selected.x === cell.x && selected.y === cell.y
+              const isOccupied = !isOpen(cell, occupancy)
               return (
-                <div className="cell" key={`${cell.x}-${cell.y}`}>
+                <div
+                  className={`cell${isSelected ? ' selected' : ''}${isOccupied ? ' occupied' : ''}`}
+                  key={`${cell.x}-${cell.y}`}
+                  onClick={() => handleCellClick(cell)}
+                >
                   {piece && (
                     <div className={`piece ${piece.player}`}>
                       <div className="core" />
-                      <div className="score-dot" />
+                      <div
+                        className="score-dot"
+                        style={
+                          {
+                            ['--score-opacity' as string]: (4 - piece.stems.length) / 4,
+                          } as CSSProperties
+                        }
+                      />
                       {piece.stems.map((stem) => (
-                        <span key={`${stem}-stem`} className={`stem ${stem}`} />
+                        <span key={`${piece.id}-${stem}-stem`} className={`stem ${stem}`} />
                       ))}
                       {piece.stems.map((stem) => (
-                        <span key={`${stem}-node`} className={`node ${stem}`} />
+                        <span key={`${piece.id}-${stem}-node`} className={`node ${stem}`} />
                       ))}
                     </div>
                   )}
@@ -87,8 +152,12 @@ function App() {
           </div>
 
           <div className="action-row">
-            <button className="btn primary">Confirm Move</button>
-            <button className="btn ghost">Undo</button>
+            <button className="btn primary" disabled={!selected || isOver} onClick={handleConfirm}>
+              Confirm Move
+            </button>
+            <button className="btn ghost" onClick={handleUndo}>
+              Clear Selection
+            </button>
           </div>
         </section>
 
@@ -106,9 +175,9 @@ function App() {
           <div className="panel">
             <h2>Next Steps</h2>
             <ul className="list">
-              <li>Implement selection + placement flow</li>
-              <li>Port scoring + capture rules</li>
-              <li>Add stem animations on placement</li>
+              <li>Implement capture + scoring rules (in progress)</li>
+              <li>Add turn indicator + end game modal</li>
+              <li>Port bot logic</li>
             </ul>
           </div>
 
@@ -121,6 +190,108 @@ function App() {
       </main>
     </div>
   )
+}
+
+function applyMove(
+  anchors: Anchor[],
+  position: Position,
+  player: Player,
+  nextId: number
+): { anchors: Anchor[]; nextId: number } {
+  const updated = anchors.map((anchor) => ({ ...anchor, stems: [...anchor.stems] }))
+
+  const capturePairs: Array<{ capturedId: number; capturingId: number }> = []
+  diagonals.forEach((offset) => {
+    const first = getAnchorAt(updated, position.x + offset.dx, position.y + offset.dy)
+    if (!first || first.player === player) return
+    const second = getAnchorAt(updated, first.x + offset.dx, first.y + offset.dy)
+    if (!second || second.player !== player) return
+    capturePairs.push({ capturedId: first.id, capturingId: second.id })
+  })
+
+  capturePairs.forEach(({ capturedId, capturingId }) => {
+    const captured = updated.find((anchor) => anchor.id === capturedId)
+    if (captured) {
+      captured.player = captured.player === 'blue' ? 'orange' : 'blue'
+      captured.stems = []
+    }
+    const capturing = updated.find((anchor) => anchor.id === capturingId)
+    if (capturing) {
+      capturing.stems = []
+    }
+  })
+
+  const occupancyAfterCapture = buildOccupancy(updated)
+  capturePairs.forEach(({ capturingId }) => {
+    const capturing = updated.find((anchor) => anchor.id === capturingId)
+    if (!capturing) return
+    const available = getAvailableStems(capturing, occupancyAfterCapture)
+    capturing.stems = available
+  })
+
+  const occupancyBeforeNew = buildOccupancy(updated)
+  const stems = getAvailableStems({ x: position.x, y: position.y }, occupancyBeforeNew)
+  updated.push({ id: nextId, x: position.x, y: position.y, player, stems })
+
+  return { anchors: updated, nextId: nextId + 1 }
+}
+
+function buildOccupancy(anchors: Anchor[]): Set<string> {
+  const occupied = new Set<string>()
+  anchors.forEach((anchor) => {
+    occupied.add(keyFor(anchor.x, anchor.y))
+    anchor.stems.forEach((stem) => {
+      const offset = directions.find((dir) => dir.dir === stem)
+      if (!offset) return
+      const x = anchor.x + offset.dx
+      const y = anchor.y + offset.dy
+      if (inBounds(x, y)) {
+        occupied.add(keyFor(x, y))
+      }
+    })
+  })
+  return occupied
+}
+
+function getAvailableStems(anchor: { x: number; y: number }, occupancy: Set<string>): Direction[] {
+  const stems: Direction[] = []
+  directions.forEach((offset) => {
+    const x = anchor.x + offset.dx
+    const y = anchor.y + offset.dy
+    if (!offset.dir || !inBounds(x, y)) return
+    if (!occupancy.has(keyFor(x, y))) {
+      stems.push(offset.dir)
+    }
+  })
+  return stems
+}
+
+function scoreAnchors(anchors: Anchor[]): { blue: number; orange: number } {
+  return anchors.reduce(
+    (acc, anchor) => {
+      const value = 4 - anchor.stems.length
+      if (anchor.player === 'blue') acc.blue += value
+      else acc.orange += value
+      return acc
+    },
+    { blue: 0, orange: 0 }
+  )
+}
+
+function getAnchorAt(anchors: Anchor[], x: number, y: number): Anchor | undefined {
+  return anchors.find((anchor) => anchor.x === x && anchor.y === y)
+}
+
+function isOpen(cell: Position, occupancy: Set<string>): boolean {
+  return !occupancy.has(keyFor(cell.x, cell.y))
+}
+
+function keyFor(x: number, y: number): string {
+  return `${x},${y}`
+}
+
+function inBounds(x: number, y: number): boolean {
+  return x >= 0 && x < gridSize && y >= 0 && y < gridSize
 }
 
 export default App

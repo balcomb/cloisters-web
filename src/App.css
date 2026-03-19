@@ -129,6 +129,21 @@
   background: rgba(190, 195, 205, 0.7);
   border: 1px solid rgba(0, 0, 0, 0.05);
   overflow: visible;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.cell:hover:not(.occupied):not(.selected) {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.cell.selected {
+  box-shadow: inset 0 0 0 3px rgba(47, 107, 214, 0.6);
+}
+
+.cell.occupied {
+  cursor: default;
 }
 
 .piece {
@@ -156,13 +171,15 @@
 
 .score-dot {
   position: absolute;
-  width: 18%;
-  height: 18%;
+  width: 28%;
+  height: 28%;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.9);
-  top: 41%;
-  left: 41%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 3;
+  opacity: var(--score-opacity, 1);
 }
 
 .stem {
@@ -212,22 +229,22 @@
 }
 
 .node.up {
-  top: calc(50% - 100%);
+  top: calc(50% - 105%);
   left: 50%;
 }
 
 .node.down {
-  top: calc(50% + 100%);
+  top: calc(50% + 105%);
   left: 50%;
 }
 
 .node.left {
-  left: calc(50% - 100%);
+  left: calc(50% - 105%);
   top: 50%;
 }
 
 .node.right {
-  left: calc(50% + 100%);
+  left: calc(50% + 105%);
   top: 50%;
 }
 
