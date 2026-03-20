@@ -190,7 +190,7 @@
   opacity: 0.7;
   border-radius: 999px;
   transform-origin: center;
-  animation: stemGrow 0.5s ease;
+  animation-fill-mode: forwards;
   z-index: 1;
   top: 50%;
   left: 50%;
@@ -198,22 +198,26 @@
 
 .stem.up {
   transform: translate(-50%, -100%);
+  animation: stemUp 0.35s ease-out;
 }
 
 .stem.down {
   transform: translate(-50%, 0%);
+  animation: stemDown 0.35s ease-out;
 }
 
 .stem.left {
   width: 100%;
   height: 30%;
   transform: translate(-100%, -50%);
+  animation: stemLeft 0.35s ease-out;
 }
 
 .stem.right {
   width: 100%;
   height: 30%;
   transform: translate(0%, -50%);
+  animation: stemRight 0.35s ease-out;
 }
 
 .node {
@@ -226,6 +230,9 @@
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 1;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(0);
+  animation: nodePopIn 0.3s ease-out 0.38s forwards;
 }
 
 .node.up {
@@ -342,6 +349,59 @@
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes stemUp {
+  from {
+    transform: translate(-50%, -50%) scaleY(0.1);
+    opacity: 0.2;
+  }
+  to {
+    transform: translate(-50%, -100%) scaleY(1);
+    opacity: 0.7;
+  }
+}
+
+@keyframes stemDown {
+  from {
+    transform: translate(-50%, -50%) scaleY(0.1);
+    opacity: 0.2;
+  }
+  to {
+    transform: translate(-50%, 0%) scaleY(1);
+    opacity: 0.7;
+  }
+}
+
+@keyframes stemLeft {
+  from {
+    transform: translate(-50%, -50%) scaleX(0.1);
+    opacity: 0.2;
+  }
+  to {
+    transform: translate(-100%, -50%) scaleX(1);
+    opacity: 0.7;
+  }
+}
+
+@keyframes stemRight {
+  from {
+    transform: translate(-50%, -50%) scaleX(0.1);
+    opacity: 0.2;
+  }
+  to {
+    transform: translate(0%, -50%) scaleX(1);
+    opacity: 0.7;
+  }
+}
+
+@keyframes nodePopIn {
+  from {
+    transform: translate(-50%, -50%) scale(0);
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
