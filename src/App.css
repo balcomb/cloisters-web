@@ -314,6 +314,12 @@
   gap: 8px;
 }
 
+.toggle-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .pill {
   padding: 6px 12px;
   border-radius: 999px;
