@@ -13,6 +13,9 @@ import {
   type Position,
   type SkillLevel,
 } from './game/game'
+import { loadBotGame, saveBotGame, type BotGameState } from './services/botGameStore'
+import { signInWithGoogle, signOutUser, subscribeToAuth } from './services/auth'
+import type { User } from 'firebase/auth'
 import './App.css'
 
 const initialAnchors: Anchor[] = []
@@ -25,6 +28,8 @@ function App() {
   const [selected, setSelected] = useState<Position | null>(null)
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('basic')
   const [lastMove, setLastMove] = useState<Position | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
   const openCount = gridSize * gridSize - occupancy.size
@@ -36,6 +41,42 @@ function App() {
     if (!anchor) return new Set<string>()
     return new Set(getCoveredPositions(anchor).map((pos) => `${pos.x},${pos.y}`))
   }, [anchors, lastMove])
+
+  useEffect(() => {
+    return subscribeToAuth((state) => {
+      setUser(state.user)
+      setAuthLoading(state.loading)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    loadBotGame(user.uid, skillLevel)
+      .then((saved) => {
+        if (!saved) return
+        setAnchors(saved.anchors ?? [])
+        setNextId(saved.nextId ?? 1)
+        setActivePlayer(saved.activePlayer ?? 'blue')
+        setSelected(null)
+        setLastMove(null)
+      })
+      .catch((error) => {
+        console.error('Failed to load saved game', error)
+      })
+  }, [user, skillLevel])
+
+  useEffect(() => {
+    if (!user) return
+    const state: BotGameState = {
+      skillLevel,
+      anchors,
+      nextId,
+      activePlayer,
+    }
+    saveBotGame(user.uid, state).catch((error) => {
+      console.error('Failed to save game', error)
+    })
+  }, [anchors, nextId, activePlayer, skillLevel, user])
 
   const handleCellClick = (cell: Position) => {
     if (isOver) return
@@ -160,42 +201,83 @@ function App() {
 
   return (
     <div className="app home">
-      <header className="home-header">
-        <div>
-          <p className="eyebrow">Cloisters</p>
-          <h1>Play the modern classic.</h1>
-          <p className="subhead">
-            A web-first take on the original strategy game. Local matches now, online soon.
-          </p>
-          <div className="home-actions">
-            <button className="btn primary" onClick={handleStartLocal}>
-              Play Local
-            </button>
-            <button className="btn secondary">How to Play</button>
-          </div>
+      <header className="toolbar">
+        <div className="toolbar-left">
+          <span className="brand">Cloisters</span>
+          <span className="toolbar-sep" />
+          <button className="toolbar-link" onClick={handleHome}>
+            Home
+          </button>
+          <button className="toolbar-link" onClick={handleStartLocal}>
+            Play Local
+          </button>
         </div>
-        <div className="home-preview">
-          <div className="panel home-card">
-            <h2>Hot Seat Ready</h2>
-            <p>Pass-and-play mode is live. Bots and online matches are next.</p>
-          </div>
+        <div className="toolbar-right">
+          {authLoading ? (
+            <span className="auth-status">Checking sign-in...</span>
+          ) : user ? (
+            <>
+              <span className="auth-status">
+                {user.photoURL ? (
+                  <img
+                    className="avatar"
+                    src={user.photoURL}
+                    alt={user.displayName ? `${user.displayName} avatar` : 'User avatar'}
+                  />
+                ) : (
+                  <span className="avatar avatar-fallback">{getInitials(user.displayName)}</span>
+                )}
+              </span>
+              <button className="btn ghost" onClick={() => signOutUser()}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button className="btn ghost" onClick={() => signInWithGoogle()}>
+              Sign in with Google
+            </button>
+          )}
         </div>
       </header>
 
-      <main className="home-main">
-        <div className="panel home-card">
-          <h2>Local Match</h2>
-          <p>Play on a single device with alternating turns.</p>
-        </div>
-        <div className="panel home-card">
-          <h2>Automaton</h2>
-          <p>Basic and advanced difficulty are ready for practice.</p>
-        </div>
-        <div className="panel home-card">
-          <h2>Captures</h2>
-          <p>Diagonal capture rules and scoring are active.</p>
-        </div>
-      </main>
+      <div className="home-content">
+        <header className="home-header">
+          <div>
+            <p className="eyebrow">Cloisters</p>
+            <h1>Play the modern classic.</h1>
+            <p className="subhead">
+              A web-first take on the original strategy game. Local matches now, online soon.
+            </p>
+            <div className="home-actions">
+              <button className="btn primary" onClick={handleStartLocal}>
+                Play Local
+              </button>
+              <button className="btn secondary">How to Play</button>
+            </div>
+          </div>
+          <div className="home-preview">
+            <div className="panel home-card">
+              <h2>Hot Seat Ready</h2>
+              <p>Pass-and-play mode is live. Bots and online matches are next.</p>
+            </div>
+          </div>
+        </header>
+
+        <main className="home-main">
+          <div className="panel home-card">
+            <h2>Local Match</h2>
+            <p>Play on a single device with alternating turns.</p>
+          </div>
+          <div className="panel home-card">
+            <h2>Automaton</h2>
+            <p>Basic and advanced difficulty are ready for practice.</p>
+          </div>
+          <div className="panel home-card">
+            <h2>Captures</h2>
+            <p>Diagonal capture rules and scoring are active.</p>
+          </div>
+        </main>
+      </div>
 
       {screen === 'game' && (
         <div className="game-overlay" role="dialog" aria-modal="true">
@@ -205,6 +287,13 @@ function App() {
       )}
     </div>
   )
+}
+
+function getInitials(name?: string | null) {
+  if (!name) return 'P'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase()
 }
 
 export default App
