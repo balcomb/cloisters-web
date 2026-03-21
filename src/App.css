@@ -263,7 +263,7 @@
 
 .cell {
   position: relative;
-  border-radius: 6px;
+  border-radius: 2px;
   background: rgba(190, 195, 205, 0.7);
   border: 1px solid rgba(0, 0, 0, 0.05);
   overflow: visible;
@@ -339,27 +339,27 @@
 }
 
 .stem.up {
-  transform: translate(-50%, -100%);
-  animation: stemUp 0.35s ease-out;
+  transform: translate(-50%, -100%) scaleY(1);
+  animation: stemUp 0.15s ease-out;
 }
 
 .stem.down {
-  transform: translate(-50%, 0%);
-  animation: stemDown 0.35s ease-out;
+  transform: translate(-50%, 0%) scaleY(1);
+  animation: stemDown 0.15s ease-out;
 }
 
 .stem.left {
   width: 100%;
   height: 30%;
-  transform: translate(-100%, -50%);
-  animation: stemLeft 0.35s ease-out;
+  transform: translate(-100%, -50%) scaleX(1);
+  animation: stemLeft 0.15s ease-out;
 }
 
 .stem.right {
   width: 100%;
   height: 30%;
-  transform: translate(0%, -50%);
-  animation: stemRight 0.35s ease-out;
+  transform: translate(0%, -50%) scaleX(1);
+  animation: stemRight 0.15s ease-out;
 }
 
 .node {
@@ -374,7 +374,7 @@
   z-index: 1;
   opacity: 1;
   transform: translate(-50%, -50%) scale(0);
-  animation: nodePopIn 0.3s ease-out 0.38s forwards;
+  animation: nodePopIn 0.14s ease-out 0.15s forwards;
 }
 
 .node.up {
