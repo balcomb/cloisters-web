@@ -7,5 +7,23 @@ service cloud.firestore {
     match /users/{userId}/offlineGame/{docId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    match /matches/{matchId} {
+      allow create: if request.auth != null
+        && request.resource.data.bluePlayer.uid == request.auth.uid;
+      allow read: if request.auth != null
+        && (
+          resource.data.status == 'waiting'
+          || request.auth.uid in resource.data.participantIds
+        );
+      allow update: if request.auth != null
+        && (
+          request.auth.uid in resource.data.participantIds
+          || (
+            resource.data.status == 'waiting'
+            && resource.data.orangePlayer == null
+            && request.resource.data.orangePlayer.uid == request.auth.uid
+          )
+        );
+    }
   }
 }

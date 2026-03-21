@@ -15,6 +15,17 @@ import {
 } from './game/game'
 import { loadBotGame, saveBotGame, type BotGameState } from './services/botGameStore'
 import { loadOfflineGame, saveOfflineGame, type OfflineGameState } from './services/offlineGameStore'
+import {
+  createOnlineMatch,
+  joinOnlineMatch,
+  joinOnlineMatchWithMove,
+  resignOnlineMatch,
+  submitOnlineMove,
+  subscribeToOnlineMatch,
+  subscribeToUserMatches,
+  subscribeToWaitingMatches,
+  type OnlineMatchState,
+} from './services/onlineMatchStore'
 import { signInWithGoogle, signOutUser, subscribeToAuth } from './services/auth'
 import type { User } from 'firebase/auth'
 import './App.css'
@@ -26,7 +37,7 @@ type ResumePrompt =
   | { mode: 'offline' }
   | null
 
-type GameMode = 'bot' | 'offline'
+type GameMode = 'bot' | 'offline' | 'online'
 
 function App() {
   const [screen, setScreen] = useState<'home' | 'game'>('home')
@@ -58,6 +69,13 @@ function App() {
   const [offlineLoaded, setOfflineLoaded] = useState(false)
   const [offlineGame, setOfflineGame] = useState<OfflineGameState | null>(null)
   const [boardSize, setBoardSize] = useState<number | null>(null)
+  const [onlineMatches, setOnlineMatches] = useState<OnlineMatchState[]>([])
+  const [waitingMatches, setWaitingMatches] = useState<OnlineMatchState[]>([])
+  const [currentOnlineMatchId, setCurrentOnlineMatchId] = useState<string | null>(null)
+  const [currentOnlineMatch, setCurrentOnlineMatch] = useState<OnlineMatchState | null>(null)
+  const [onlineError, setOnlineError] = useState<string | null>(null)
+  const [onlineBusy, setOnlineBusy] = useState(false)
+  const [resignPrompt, setResignPrompt] = useState(false)
   const boardWrapRef = useRef<HTMLDivElement | null>(null)
 
   const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
@@ -82,6 +100,11 @@ function App() {
         setOfflineGame(null)
         setSavedOffline(false)
         setOfflineLoaded(false)
+        setOnlineMatches([])
+        setWaitingMatches([])
+        setCurrentOnlineMatch(null)
+        setCurrentOnlineMatchId(null)
+        setResignPrompt(false)
       }
     })
   }, [])
@@ -112,6 +135,21 @@ function App() {
       .catch((error) => {
         console.error('Failed to load offline game', error)
       })
+      .finally(() => {
+        setOfflineLoaded(true)
+      })
+    const unsubscribeMatches = subscribeToUserMatches(user.uid, (matches) => {
+      setOnlineMatches(matches.filter((match) => match.status !== 'waiting' || match.anchors.length > 0))
+    })
+    const unsubscribeWaiting = subscribeToWaitingMatches((matches) => {
+      setWaitingMatches(
+        matches.filter((match) => match.bluePlayer.uid !== user.uid && match.anchors.length > 0)
+      )
+    })
+    return () => {
+      unsubscribeMatches()
+      unsubscribeWaiting()
+    }
   }, [user])
 
   useEffect(() => {
@@ -131,7 +169,7 @@ function App() {
       setSavedGames((current) => ({ ...current, [skillLevel]: state }))
       const hasMoves = anchors.length > 0
       setSavedBySkill((current) => ({ ...current, [skillLevel]: hasMoves }))
-    } else {
+    } else if (gameMode === 'offline') {
       if (!offlineLoaded) return
       const state: OfflineGameState = {
         anchors,
@@ -148,14 +186,80 @@ function App() {
     }
   }, [anchors, nextId, activePlayer, skillLevel, user, loadedBySkill, screen, gameMode, offlineLoaded])
 
+  useEffect(() => {
+    if (gameMode !== 'online' || !currentOnlineMatchId) return
+    const unsubscribe = subscribeToOnlineMatch(currentOnlineMatchId, (match) => {
+      setCurrentOnlineMatch(match)
+      if (!match) {
+        setOnlineError('This match is no longer available.')
+        setScreen('home')
+        return
+      }
+      setAnchors(match.anchors ?? [])
+      setNextId(match.nextId ?? 1)
+      setActivePlayer(match.activePlayer ?? 'blue')
+      setSelected(null)
+      setLastMove(match.lastMove ?? null)
+      if (match.status === 'finished') {
+        setResignPrompt(false)
+      }
+    })
+    return () => {
+      unsubscribe()
+    }
+  }, [gameMode, currentOnlineMatchId])
+
+  const isOnlineDraft = gameMode === 'online' && currentOnlineMatchId === null
+  const isOnlineJoinDraft =
+    gameMode === 'online' &&
+    Boolean(
+      currentOnlineMatch &&
+        currentOnlineMatch.status === 'waiting' &&
+        user &&
+        currentOnlineMatch.bluePlayer.uid !== user.uid &&
+        !currentOnlineMatch.orangePlayer
+    )
+  const canTakeTurn =
+    isOnlineDraft ||
+    isOnlineJoinDraft ||
+    canPlayTurn(gameMode, activePlayer, currentOnlineMatch, user?.uid ?? null)
+
   const handleCellClick = (cell: Position) => {
-    if (isOver) return
+    if (!canTakeTurn || isOver) return
     if (!isOpen(cell, occupancy)) return
     setSelected(cell)
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selected || isOver) return
+    if (gameMode === 'online') {
+      try {
+        setOnlineBusy(true)
+        setOnlineError(null)
+        if (!user) {
+          throw new Error('Sign in to play online.')
+        }
+        if (!currentOnlineMatchId) {
+          const matchId = await createOnlineMatch(user, selected)
+          setCurrentOnlineMatchId(matchId)
+          setCurrentOnlineMatch(null)
+        } else if (
+          currentOnlineMatch?.status === 'waiting' &&
+          currentOnlineMatch.bluePlayer.uid !== user.uid &&
+          !currentOnlineMatch.orangePlayer
+        ) {
+          await joinOnlineMatchWithMove(currentOnlineMatchId, user, selected)
+        } else {
+          await submitOnlineMove(currentOnlineMatchId, user.uid, selected)
+        }
+        setSelected(null)
+      } catch (error) {
+        setOnlineError(error instanceof Error ? error.message : 'Failed to submit move.')
+      } finally {
+        setOnlineBusy(false)
+      }
+      return
+    }
     const updated = applyMove(anchors, selected, activePlayer, nextId)
     setAnchors(updated.anchors)
     setNextId(updated.nextId)
@@ -195,6 +299,65 @@ function App() {
     setGameMode('offline')
     handleRestart()
     setScreen('game')
+  }
+
+  const handleCreateOnline = async () => {
+    if (!user) {
+      setOnlineError('Sign in to create an online match.')
+      return
+    }
+    const existingWaitingMatch = onlineMatches.find(
+      (match) => match.status === 'waiting' && match.bluePlayer.uid === user.uid && match.anchors.length > 0
+    )
+    setOnlineError(null)
+    setGameMode('online')
+    setCurrentOnlineMatch(existingWaitingMatch ?? null)
+    setCurrentOnlineMatchId(existingWaitingMatch?.id ?? null)
+    if (!existingWaitingMatch) {
+      handleRestart()
+    }
+    setScreen('game')
+  }
+
+  const handleJoinOnline = async (match: OnlineMatchState) => {
+    if (!user) return
+    try {
+      setOnlineBusy(true)
+      setOnlineError(null)
+      await joinOnlineMatch(match.id, user)
+      setGameMode('online')
+      setCurrentOnlineMatchId(match.id)
+      setCurrentOnlineMatch(match)
+      setSelected(null)
+      setScreen('game')
+    } catch (error) {
+      setOnlineError(error instanceof Error ? error.message : 'Failed to join match.')
+    } finally {
+      setOnlineBusy(false)
+    }
+  }
+
+  const handleOpenOnlineMatch = (match: OnlineMatchState) => {
+    setOnlineError(null)
+    setResignPrompt(false)
+    setGameMode('online')
+    setCurrentOnlineMatchId(match.id)
+    setCurrentOnlineMatch(match)
+    setScreen('game')
+  }
+
+  const handleResign = async () => {
+    if (!user || !currentOnlineMatchId) return
+    try {
+      setOnlineBusy(true)
+      setOnlineError(null)
+      await resignOnlineMatch(currentOnlineMatchId, user.uid)
+      setResignPrompt(false)
+    } catch (error) {
+      setOnlineError(error instanceof Error ? error.message : 'Failed to resign match.')
+    } finally {
+      setOnlineBusy(false)
+    }
   }
 
   const handleResume = () => {
@@ -258,6 +421,8 @@ function App() {
       setSignInPrompt(true)
       setSignInPromptShown(true)
     }
+    setSelected(null)
+    setResignPrompt(false)
     setScreen('home')
   }
 
@@ -302,10 +467,45 @@ function App() {
     }
   }, [screen])
 
+  const onlinePlayer = currentOnlineMatch ? getOnlinePlayer(currentOnlineMatch, user?.uid ?? null) : null
+  const canConfirm =
+    Boolean(selected) &&
+    !isOver &&
+    !onlineBusy &&
+    (isOnlineDraft ||
+      isOnlineJoinDraft ||
+      canPlayTurn(gameMode, activePlayer, currentOnlineMatch, user?.uid ?? null))
+  const matchLabel =
+    gameMode === 'bot'
+      ? 'Bot Match'
+      : gameMode === 'offline'
+        ? 'Offline Match'
+        : isOnlineDraft
+          ? 'Start Online Match'
+        : isOnlineJoinDraft
+          ? 'Join Online Match'
+        : currentOnlineMatch?.status === 'waiting'
+          ? 'Online Match Waiting'
+          : 'Online Match'
+  const onlineStatus = getOnlineStatusText(currentOnlineMatch, user?.uid ?? null)
+  const canResign =
+    gameMode === 'online' &&
+    Boolean(currentOnlineMatchId && currentOnlineMatch && currentOnlineMatch.status !== 'finished')
+
   const gameView = (
     <div className="game-shell">
       <header className="game-header">
-        <p className="eyebrow">{gameMode === 'bot' ? 'Bot Match' : 'Offline Match'}</p>
+        <div className="game-heading">
+          <p className="eyebrow">{matchLabel}</p>
+          {gameMode === 'online' && (
+            <p className="match-meta">
+              {onlinePlayer && <span>You are {onlinePlayer}</span>}
+              {isOnlineDraft && <span>Make the first move to publish a waiting match</span>}
+              {isOnlineJoinDraft && <span>Make the second move to join this match</span>}
+              {onlineStatus && <span>{onlineStatus}</span>}
+            </p>
+          )}
+        </div>
         <button className="btn ghost close-btn" onClick={handleHome} aria-label="Close game">
           Close
         </button>
@@ -340,9 +540,9 @@ function App() {
             const isLastMove = lastMoveKeys.has(`${cell.x},${cell.y}`)
             return (
               <div
-                className={`cell${isSelected ? ' selected' : ''}${isOccupied ? ' occupied' : ''}${
+                className={`cell${isSelected ? ` selected selected-${activePlayer}` : ''}${isOccupied ? ' occupied' : ''}${
                   isLastMove ? ' last-move' : ''
-                }`}
+                }${canTakeTurn ? '' : ' disabled'}`}
                 key={`${cell.x}-${cell.y}`}
                 onClick={() => handleCellClick(cell)}
               >
@@ -372,12 +572,17 @@ function App() {
       </div>
 
       <div className="action-row">
-        <button className="btn primary" disabled={!selected || isOver} onClick={handleConfirm}>
+        <button className="btn primary" disabled={!canConfirm} onClick={() => void handleConfirm()}>
           Confirm Move
         </button>
         <button className="btn ghost" onClick={handleUndo}>
           Clear Selection
         </button>
+        {canResign && (
+          <button className="btn secondary" disabled={onlineBusy} onClick={() => setResignPrompt(true)}>
+            Resign Match
+          </button>
+        )}
       </div>
     </div>
   )
@@ -426,7 +631,7 @@ function App() {
             <p className="eyebrow">Cloisters</p>
             <h1>Play the modern classic.</h1>
             <p className="subhead">
-              A web-first take on the original strategy game. Local matches now, online soon.
+              A web-first take on the original strategy game with local, bot, and online matches.
             </p>
             <div className="home-actions">
               <button className="btn primary" onClick={() => handleStartBot('basic')}>
@@ -441,17 +646,52 @@ function App() {
                 Play Offline
                 {savedOffline && <BookmarkIcon />}
               </button>
+              <button className="btn secondary" onClick={() => void handleCreateOnline()} disabled={onlineBusy}>
+                Start Online Match
+              </button>
             </div>
+            {onlineError && <p className="inline-message error">{onlineError}</p>}
           </div>
           <div className="home-preview">
             <div className="panel home-card">
-              <h2>Hot Seat Ready</h2>
-              <p>Pass-and-play mode is live. Bots and online matches are next.</p>
+              <h2>Async Matches</h2>
+              <p>Start with the first move, leave the match open, and let another player join from the lobby.</p>
             </div>
           </div>
         </header>
 
         <main className="home-main">
+          <div className="panel home-card">
+            <h2>Open Games</h2>
+            <p>Browse waiting matches and join as orange after the creator has placed the opening move.</p>
+            {user ? (
+              waitingMatches.length === 0 ? (
+                <p className="note">No waiting matches right now.</p>
+              ) : (
+                <div className="match-list compact">
+                  {waitingMatches.map((match) => (
+                    <button
+                      key={match.id}
+                      className="match-card"
+                      onClick={() => void handleJoinOnline(match)}
+                      disabled={onlineBusy}
+                    >
+                      <span className="match-card-top">
+                        <strong>{match.bluePlayer.displayName ?? 'Blue player'}</strong>
+                        <span className="match-badge waiting">waiting</span>
+                      </span>
+                      <span className="match-card-bottom">
+                        <span>Blue to start complete</span>
+                        <span>Join as orange</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : (
+              <p className="note">Sign in with Google to browse and join waiting matches.</p>
+            )}
+          </div>
           <div className="panel home-card">
             <h2>Local Match</h2>
             <p>Play on a single device with alternating turns.</p>
@@ -465,6 +705,37 @@ function App() {
             <p>Diagonal capture rules and scoring are active.</p>
           </div>
         </main>
+
+        {user && (
+          <section className="panel matches-panel">
+            <div className="matches-header">
+              <h2>Your Matches</h2>
+              <p>Open an active match or copy its code to invite another player.</p>
+            </div>
+            {onlineMatches.length === 0 ? (
+              <p className="note">No online matches yet.</p>
+            ) : (
+              <div className="match-list">
+                {onlineMatches.map((match) => (
+                  <button
+                    key={match.id}
+                    className="match-card"
+                    onClick={() => handleOpenOnlineMatch(match)}
+                  >
+                    <span className="match-card-top">
+                      <strong>{describeOpponent(match, user.uid)}</strong>
+                      <span className={`match-badge ${match.status}`}>{match.status}</span>
+                    </span>
+                    <span className="match-card-bottom">
+                      <span>{match.status === 'waiting' ? 'Opening move submitted' : 'Remote match'}</span>
+                      <span>{getOnlineStatusText(match, user.uid)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {screen === 'game' && (
@@ -520,6 +791,24 @@ function App() {
           </div>
         </div>
       )}
+
+      {resignPrompt && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => setResignPrompt(false)} />
+          <div className="modal-card">
+            <h2>Resign this match?</h2>
+            <p>This will immediately end the online match for both players.</p>
+            <div className="modal-actions">
+              <button className="btn secondary" disabled={onlineBusy} onClick={() => void handleResign()}>
+                Resign
+              </button>
+              <button className="btn ghost" onClick={() => setResignPrompt(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -529,6 +818,53 @@ function getInitials(name?: string | null) {
   const parts = name.trim().split(/\s+/)
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
   return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase()
+}
+
+function getOnlinePlayer(match: OnlineMatchState, userId: string | null) {
+  if (!userId) return null
+  if (match.bluePlayer.uid === userId) return 'blue'
+  if (match.orangePlayer?.uid === userId) return 'orange'
+  return null
+}
+
+function canPlayTurn(
+  gameMode: GameMode,
+  activePlayer: Player,
+  match: OnlineMatchState | null,
+  userId: string | null
+) {
+  if (gameMode === 'offline') return true
+  if (gameMode === 'bot') return activePlayer === 'blue'
+  const onlinePlayer = match ? getOnlinePlayer(match, userId) : null
+  return Boolean(match && match.status === 'active' && onlinePlayer === activePlayer)
+}
+
+function getOnlineStatusText(match: OnlineMatchState | null, userId: string | null) {
+  if (!match) return ''
+  if (match.status === 'waiting') return 'Waiting for opponent to join'
+  if (match.status === 'finished') {
+    if (match.resignedBy) {
+      const player = getOnlinePlayer(match, userId)
+      if (player === match.resignedBy) return 'You resigned'
+      if (player) return 'Opponent resigned'
+      return `${match.resignedBy} resigned`
+    }
+    if (match.winner === 'draw') return 'Draw'
+    if (!match.winner) return 'Finished'
+    const player = getOnlinePlayer(match, userId)
+    return player === match.winner ? 'You won' : 'You lost'
+  }
+  const active = match.activePlayer === 'blue' ? match.bluePlayer : match.orangePlayer
+  if (!active) return 'Waiting for opponent'
+  if (active.uid === userId) return 'Your turn'
+  return `${active.displayName ?? 'Opponent'} to move`
+}
+
+function describeOpponent(match: OnlineMatchState, userId: string) {
+  const player = getOnlinePlayer(match, userId)
+  if (player === 'blue') return match.orangePlayer?.displayName ?? 'Waiting for opponent'
+  if (player === 'orange') return match.bluePlayer.displayName ?? 'Blue player'
+  return `${match.bluePlayer.displayName ?? 'Blue player'} vs ${match.orangePlayer?.displayName ?? 'Orange player'}`
 }
 
 function BookmarkIcon() {
