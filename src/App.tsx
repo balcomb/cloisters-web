@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   applyMove,
   buildOccupancy,
@@ -57,6 +57,8 @@ function App() {
   const [savedOffline, setSavedOffline] = useState(false)
   const [offlineLoaded, setOfflineLoaded] = useState(false)
   const [offlineGame, setOfflineGame] = useState<OfflineGameState | null>(null)
+  const [boardSize, setBoardSize] = useState<number | null>(null)
+  const boardWrapRef = useRef<HTMLDivElement | null>(null)
 
   const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
   const openCount = gridSize * gridSize - occupancy.size
@@ -275,6 +277,31 @@ function App() {
     return () => window.clearTimeout(timeout)
   }, [anchors, activePlayer, isOver, nextId, skillLevel, gameMode])
 
+  useEffect(() => {
+    if (screen !== 'game') return
+    const element = boardWrapRef.current
+    if (!element) return
+
+    const updateBoardSize = () => {
+      const { width, height } = element.getBoundingClientRect()
+      const nextSize = Math.max(0, Math.floor(Math.min(width, height)))
+      setBoardSize(nextSize)
+    }
+
+    updateBoardSize()
+
+    const observer = new ResizeObserver(() => {
+      updateBoardSize()
+    })
+    observer.observe(element)
+    window.addEventListener('resize', updateBoardSize)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateBoardSize)
+    }
+  }, [screen])
+
   const gameView = (
     <div className="game-shell">
       <header className="game-header">
@@ -295,42 +322,53 @@ function App() {
         </div>
       </div>
 
-      <div className="board" style={{ ['--size' as string]: gridSize }}>
-        {cells.map((cell) => {
-          const piece = anchors.find((p) => p.x === cell.x && p.y === cell.y)
-          const isSelected = selected && selected.x === cell.x && selected.y === cell.y
-          const isOccupied = !isOpen(cell, occupancy)
-          const isLastMove = lastMoveKeys.has(`${cell.x},${cell.y}`)
-          return (
-            <div
-              className={`cell${isSelected ? ' selected' : ''}${isOccupied ? ' occupied' : ''}${
-                isLastMove ? ' last-move' : ''
-              }`}
-              key={`${cell.x}-${cell.y}`}
-              onClick={() => handleCellClick(cell)}
-            >
-              {piece && (
-                <div className={`piece ${piece.player}`}>
-                  <div className="core" />
-                  <div
-                    className="score-dot"
-                    style={
-                      {
-                        ['--score-opacity' as string]: (4 - piece.stems.length) / 4,
-                      } as CSSProperties
-                    }
-                  />
-                  {piece.stems.map((stem) => (
-                    <span key={`${piece.id}-${stem}-stem`} className={`stem ${stem}`} />
-                  ))}
-                  {piece.stems.map((stem) => (
-                    <span key={`${piece.id}-${stem}-node`} className={`node ${stem}`} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+      <div className="board-wrap" ref={boardWrapRef}>
+        <div
+          className="board"
+          style={
+            {
+              ['--size' as string]: gridSize,
+              width: boardSize ? `${boardSize}px` : undefined,
+              height: boardSize ? `${boardSize}px` : undefined,
+            } as CSSProperties
+          }
+        >
+          {cells.map((cell) => {
+            const piece = anchors.find((p) => p.x === cell.x && p.y === cell.y)
+            const isSelected = selected && selected.x === cell.x && selected.y === cell.y
+            const isOccupied = !isOpen(cell, occupancy)
+            const isLastMove = lastMoveKeys.has(`${cell.x},${cell.y}`)
+            return (
+              <div
+                className={`cell${isSelected ? ' selected' : ''}${isOccupied ? ' occupied' : ''}${
+                  isLastMove ? ' last-move' : ''
+                }`}
+                key={`${cell.x}-${cell.y}`}
+                onClick={() => handleCellClick(cell)}
+              >
+                {piece && (
+                  <div className={`piece ${piece.player}`}>
+                    <div className="core" />
+                    <div
+                      className="score-dot"
+                      style={
+                        {
+                          ['--score-opacity' as string]: (4 - piece.stems.length) / 4,
+                        } as CSSProperties
+                      }
+                    />
+                    {piece.stems.map((stem) => (
+                      <span key={`${piece.id}-${stem}-stem`} className={`stem ${stem}`} />
+                    ))}
+                    {piece.stems.map((stem) => (
+                      <span key={`${piece.id}-${stem}-node`} className={`node ${stem}`} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       <div className="action-row">
