@@ -30,6 +30,19 @@ function App() {
   const [lastMove, setLastMove] = useState<Position | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [resumePrompt, setResumePrompt] = useState<SkillLevel | null>(null)
+  const [savedGames, setSavedGames] = useState<Record<SkillLevel, BotGameState | null>>({
+    basic: null,
+    advanced: null,
+  })
+  const [savedBySkill, setSavedBySkill] = useState<Record<SkillLevel, boolean>>({
+    basic: false,
+    advanced: false,
+  })
+  const [loadedBySkill, setLoadedBySkill] = useState<Record<SkillLevel, boolean>>({
+    basic: false,
+    advanced: false,
+  })
 
   const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
   const openCount = gridSize * gridSize - occupancy.size
@@ -46,27 +59,37 @@ function App() {
     return subscribeToAuth((state) => {
       setUser(state.user)
       setAuthLoading(state.loading)
+      if (!state.user) {
+        setSavedGames({ basic: null, advanced: null })
+        setSavedBySkill({ basic: false, advanced: false })
+        setLoadedBySkill({ basic: false, advanced: false })
+      }
     })
   }, [])
 
   useEffect(() => {
     if (!user) return
-    loadBotGame(user.uid, skillLevel)
-      .then((saved) => {
-        if (!saved) return
-        setAnchors(saved.anchors ?? [])
-        setNextId(saved.nextId ?? 1)
-        setActivePlayer(saved.activePlayer ?? 'blue')
-        setSelected(null)
-        setLastMove(null)
-      })
-      .catch((error) => {
-        console.error('Failed to load saved game', error)
-      })
-  }, [user, skillLevel])
+    const levels: SkillLevel[] = ['basic', 'advanced']
+    levels.forEach((level) => {
+      loadBotGame(user.uid, level)
+        .then((saved) => {
+          setSavedGames((current) => ({ ...current, [level]: saved }))
+          const hasMoves = Array.isArray(saved?.anchors) && saved.anchors.length > 0
+          setSavedBySkill((current) => ({ ...current, [level]: hasMoves }))
+        })
+        .catch((error) => {
+          console.error('Failed to load saved game', error)
+        })
+        .finally(() => {
+          setLoadedBySkill((current) => ({ ...current, [level]: true }))
+        })
+    })
+  }, [user])
 
   useEffect(() => {
     if (!user) return
+    if (!loadedBySkill[skillLevel]) return
+    if (screen !== 'game') return
     const state: BotGameState = {
       skillLevel,
       anchors,
@@ -76,7 +99,10 @@ function App() {
     saveBotGame(user.uid, state).catch((error) => {
       console.error('Failed to save game', error)
     })
-  }, [anchors, nextId, activePlayer, skillLevel, user])
+    setSavedGames((current) => ({ ...current, [skillLevel]: state }))
+    const hasMoves = anchors.length > 0
+    setSavedBySkill((current) => ({ ...current, [skillLevel]: hasMoves }))
+  }, [anchors, nextId, activePlayer, skillLevel, user, loadedBySkill, screen])
 
   const handleCellClick = (cell: Position) => {
     if (isOver) return
@@ -106,9 +132,39 @@ function App() {
     setLastMove(null)
   }
 
-  const handleStartLocal = () => {
+  const handleStartBot = (level: SkillLevel) => {
+    if (user && savedBySkill[level]) {
+      setResumePrompt(level)
+      return
+    }
+    setSkillLevel(level)
     handleRestart()
     setScreen('game')
+  }
+
+  const handleResume = () => {
+    if (!resumePrompt) return
+    setSkillLevel(resumePrompt)
+    const saved = savedGames[resumePrompt]
+    if (saved) {
+      setAnchors(saved.anchors ?? [])
+      setNextId(saved.nextId ?? 1)
+      setActivePlayer(saved.activePlayer ?? 'blue')
+      setSelected(null)
+      setLastMove(null)
+    } else {
+      handleRestart()
+    }
+    setScreen('game')
+    setResumePrompt(null)
+  }
+
+  const handleStartNew = () => {
+    if (!resumePrompt) return
+    setSkillLevel(resumePrompt)
+    handleRestart()
+    setScreen('game')
+    setResumePrompt(null)
   }
 
   const handleHome = () => {
@@ -208,9 +264,6 @@ function App() {
           <button className="toolbar-link" onClick={handleHome}>
             Home
           </button>
-          <button className="toolbar-link" onClick={handleStartLocal}>
-            Play Local
-          </button>
         </div>
         <div className="toolbar-right">
           {authLoading ? (
@@ -249,10 +302,15 @@ function App() {
               A web-first take on the original strategy game. Local matches now, online soon.
             </p>
             <div className="home-actions">
-              <button className="btn primary" onClick={handleStartLocal}>
-                Play Local
+              <button className="btn primary" onClick={() => handleStartBot('basic')}>
+                Play Bot (Basic)
+                {savedBySkill.basic && <BookmarkIcon />}
               </button>
-              <button className="btn secondary">How to Play</button>
+              <button className="btn secondary" onClick={() => handleStartBot('advanced')}>
+                Play Bot (Advanced)
+                {savedBySkill.advanced && <BookmarkIcon />}
+              </button>
+              <button className="btn ghost">How to Play</button>
             </div>
           </div>
           <div className="home-preview">
@@ -285,6 +343,30 @@ function App() {
           <div className="game-overlay-panel">{gameView}</div>
         </div>
       )}
+
+      {resumePrompt && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => setResumePrompt(null)} />
+          <div className="modal-card">
+            <h2>Resume saved game?</h2>
+            <p>
+              You have a saved {resumePrompt} bot game. Would you like to resume it or start a
+              new one?
+            </p>
+            <div className="modal-actions">
+              <button className="btn primary" onClick={handleResume}>
+                Resume
+              </button>
+              <button className="btn secondary" onClick={handleStartNew}>
+                Start New
+              </button>
+              <button className="btn ghost" onClick={() => setResumePrompt(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -294,6 +376,16 @@ function getInitials(name?: string | null) {
   const parts = name.trim().split(/\s+/)
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
   return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase()
+}
+
+function BookmarkIcon() {
+  return (
+    <span className="icon bookmark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" role="presentation">
+        <path d="M7 4h10a1 1 0 0 1 1 1v15l-6-3-6 3V5a1 1 0 0 1 1-1Z" />
+      </svg>
+    </span>
+  )
 }
 
 export default App

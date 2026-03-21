@@ -23,6 +23,14 @@ VITE_FIREBASE_APP_ID=...
 VITE_FIREBASE_MEASUREMENT_ID=...
 ```
 
+## Firestore Rules
+
+Use `firestore.rules` to restrict access to per-user bot game data:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
 ## Scripts
 
 ```bash
