@@ -14,14 +14,23 @@ import {
   type SkillLevel,
 } from './game/game'
 import { loadBotGame, saveBotGame, type BotGameState } from './services/botGameStore'
+import { loadOfflineGame, saveOfflineGame, type OfflineGameState } from './services/offlineGameStore'
 import { signInWithGoogle, signOutUser, subscribeToAuth } from './services/auth'
 import type { User } from 'firebase/auth'
 import './App.css'
 
 const initialAnchors: Anchor[] = []
 
+type ResumePrompt =
+  | { mode: 'bot'; skill: SkillLevel }
+  | { mode: 'offline' }
+  | null
+
+type GameMode = 'bot' | 'offline'
+
 function App() {
   const [screen, setScreen] = useState<'home' | 'game'>('home')
+  const [gameMode, setGameMode] = useState<GameMode>('bot')
   const [anchors, setAnchors] = useState<Anchor[]>(initialAnchors)
   const [nextId, setNextId] = useState(1)
   const [activePlayer, setActivePlayer] = useState<Player>('blue')
@@ -30,7 +39,9 @@ function App() {
   const [lastMove, setLastMove] = useState<Position | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [resumePrompt, setResumePrompt] = useState<SkillLevel | null>(null)
+  const [resumePrompt, setResumePrompt] = useState<ResumePrompt>(null)
+  const [signInPrompt, setSignInPrompt] = useState(false)
+  const [signInPromptShown, setSignInPromptShown] = useState(false)
   const [savedGames, setSavedGames] = useState<Record<SkillLevel, BotGameState | null>>({
     basic: null,
     advanced: null,
@@ -43,6 +54,9 @@ function App() {
     basic: false,
     advanced: false,
   })
+  const [savedOffline, setSavedOffline] = useState(false)
+  const [offlineLoaded, setOfflineLoaded] = useState(false)
+  const [offlineGame, setOfflineGame] = useState<OfflineGameState | null>(null)
 
   const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
   const openCount = gridSize * gridSize - occupancy.size
@@ -63,6 +77,9 @@ function App() {
         setSavedGames({ basic: null, advanced: null })
         setSavedBySkill({ basic: false, advanced: false })
         setLoadedBySkill({ basic: false, advanced: false })
+        setOfflineGame(null)
+        setSavedOffline(false)
+        setOfflineLoaded(false)
       }
     })
   }, [])
@@ -84,25 +101,50 @@ function App() {
           setLoadedBySkill((current) => ({ ...current, [level]: true }))
         })
     })
+    loadOfflineGame(user.uid)
+      .then((saved) => {
+        if (!saved) return
+        setOfflineGame(saved)
+        setSavedOffline(Boolean(saved && saved.anchors && saved.anchors.length > 0))
+      })
+      .catch((error) => {
+        console.error('Failed to load offline game', error)
+      })
   }, [user])
 
   useEffect(() => {
-    if (!user) return
-    if (!loadedBySkill[skillLevel]) return
     if (screen !== 'game') return
-    const state: BotGameState = {
-      skillLevel,
-      anchors,
-      nextId,
-      activePlayer,
+    if (gameMode === 'bot') {
+      if (!user) return
+      if (!loadedBySkill[skillLevel]) return
+      const state: BotGameState = {
+        skillLevel,
+        anchors,
+        nextId,
+        activePlayer,
+      }
+      saveBotGame(user.uid, state).catch((error) => {
+        console.error('Failed to save game', error)
+      })
+      setSavedGames((current) => ({ ...current, [skillLevel]: state }))
+      const hasMoves = anchors.length > 0
+      setSavedBySkill((current) => ({ ...current, [skillLevel]: hasMoves }))
+    } else {
+      if (!offlineLoaded) return
+      const state: OfflineGameState = {
+        anchors,
+        nextId,
+        activePlayer,
+      }
+      if (user) {
+        saveOfflineGame(user.uid, state).catch((error) => {
+          console.error('Failed to save offline game', error)
+        })
+      }
+      setOfflineGame(state)
+      setSavedOffline(anchors.length > 0)
     }
-    saveBotGame(user.uid, state).catch((error) => {
-      console.error('Failed to save game', error)
-    })
-    setSavedGames((current) => ({ ...current, [skillLevel]: state }))
-    const hasMoves = anchors.length > 0
-    setSavedBySkill((current) => ({ ...current, [skillLevel]: hasMoves }))
-  }, [anchors, nextId, activePlayer, skillLevel, user, loadedBySkill, screen])
+  }, [anchors, nextId, activePlayer, skillLevel, user, loadedBySkill, screen, gameMode, offlineLoaded])
 
   const handleCellClick = (cell: Position) => {
     if (isOver) return
@@ -134,26 +176,51 @@ function App() {
 
   const handleStartBot = (level: SkillLevel) => {
     if (user && savedBySkill[level]) {
-      setResumePrompt(level)
+      setResumePrompt({ mode: 'bot', skill: level })
       return
     }
+    setGameMode('bot')
     setSkillLevel(level)
+    handleRestart()
+    setScreen('game')
+  }
+
+  const handleStartOffline = () => {
+    if (savedOffline) {
+      setResumePrompt({ mode: 'offline' })
+      return
+    }
+    setGameMode('offline')
     handleRestart()
     setScreen('game')
   }
 
   const handleResume = () => {
     if (!resumePrompt) return
-    setSkillLevel(resumePrompt)
-    const saved = savedGames[resumePrompt]
-    if (saved) {
-      setAnchors(saved.anchors ?? [])
-      setNextId(saved.nextId ?? 1)
-      setActivePlayer(saved.activePlayer ?? 'blue')
-      setSelected(null)
-      setLastMove(null)
+    if (resumePrompt.mode === 'bot') {
+      setGameMode('bot')
+      setSkillLevel(resumePrompt.skill)
+      const saved = savedGames[resumePrompt.skill]
+      if (saved) {
+        setAnchors(saved.anchors ?? [])
+        setNextId(saved.nextId ?? 1)
+        setActivePlayer(saved.activePlayer ?? 'blue')
+        setSelected(null)
+        setLastMove(null)
+      } else {
+        handleRestart()
+      }
     } else {
-      handleRestart()
+      setGameMode('offline')
+      if (offlineGame) {
+        setAnchors(offlineGame.anchors ?? [])
+        setNextId(offlineGame.nextId ?? 1)
+        setActivePlayer(offlineGame.activePlayer ?? 'blue')
+        setSelected(null)
+        setLastMove(null)
+      } else {
+        handleRestart()
+      }
     }
     setScreen('game')
     setResumePrompt(null)
@@ -161,18 +228,40 @@ function App() {
 
   const handleStartNew = () => {
     if (!resumePrompt) return
-    setSkillLevel(resumePrompt)
+    if (resumePrompt.mode === 'bot') {
+      setGameMode('bot')
+      setSkillLevel(resumePrompt.skill)
+    } else {
+      setGameMode('offline')
+    }
     handleRestart()
     setScreen('game')
     setResumePrompt(null)
   }
 
   const handleHome = () => {
+    if (user && gameMode === 'offline' && anchors.length > 0) {
+      const state: OfflineGameState = {
+        anchors,
+        nextId,
+        activePlayer,
+      }
+      saveOfflineGame(user.uid, state).catch((error) => {
+        console.error('Failed to save offline game', error)
+      })
+      setOfflineGame(state)
+      setSavedOffline(true)
+    }
+    if (!user && anchors.length > 0 && !signInPromptShown) {
+      setSignInPrompt(true)
+      setSignInPromptShown(true)
+    }
     setScreen('home')
   }
 
   useEffect(() => {
     if (isOver || activePlayer !== 'orange') return
+    if (gameMode !== 'bot') return
     const timeout = window.setTimeout(() => {
       const move = chooseAutomatonMove(anchors, activePlayer, skillLevel)
       if (!move) return
@@ -184,12 +273,12 @@ function App() {
       setLastMove(move)
     }, 450)
     return () => window.clearTimeout(timeout)
-  }, [anchors, activePlayer, isOver, nextId, skillLevel])
+  }, [anchors, activePlayer, isOver, nextId, skillLevel, gameMode])
 
   const gameView = (
     <div className="game-shell">
       <header className="game-header">
-        <p className="eyebrow">Local Match</p>
+        <p className="eyebrow">{gameMode === 'bot' ? 'Bot Match' : 'Offline Match'}</p>
         <button className="btn ghost close-btn" onClick={handleHome} aria-label="Close game">
           Close
         </button>
@@ -310,7 +399,10 @@ function App() {
                 Play Bot (Advanced)
                 {savedBySkill.advanced && <BookmarkIcon />}
               </button>
-              <button className="btn ghost">How to Play</button>
+              <button className="btn ghost" onClick={handleStartOffline}>
+                Play Offline
+                {savedOffline && <BookmarkIcon />}
+              </button>
             </div>
           </div>
           <div className="home-preview">
@@ -350,8 +442,10 @@ function App() {
           <div className="modal-card">
             <h2>Resume saved game?</h2>
             <p>
-              You have a saved {resumePrompt} bot game. Would you like to resume it or start a
-              new one?
+              {resumePrompt.mode === 'bot'
+                ? `You have a saved ${resumePrompt.skill} bot game.`
+                : 'You have a saved offline game.'}{' '}
+              Would you like to resume it or start a new one?
             </p>
             <div className="modal-actions">
               <button className="btn primary" onClick={handleResume}>
@@ -362,6 +456,27 @@ function App() {
               </button>
               <button className="btn ghost" onClick={() => setResumePrompt(null)}>
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {signInPrompt && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => setSignInPrompt(false)} />
+          <div className="modal-card">
+            <h2>Sign in to save games</h2>
+            <p>
+              Sign in to keep your games synced across devices and resume them later from any
+              browser.
+            </p>
+            <div className="modal-actions">
+              <button className="btn primary" onClick={() => signInWithGoogle()}>
+                Sign in with Google
+              </button>
+              <button className="btn ghost" onClick={() => setSignInPrompt(false)}>
+                Not now
               </button>
             </div>
           </div>
