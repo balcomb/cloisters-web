@@ -21,12 +21,12 @@ export type PublicProfile = {
   uid: string
   displayName: string | null
   photoURL: string | null
-  wins: number
-  losses: number
-  draws: number
-  resignations: number
-  winsByResignation: number
-  completedMatches: number
+  wins?: number
+  losses?: number
+  draws?: number
+  resignations?: number
+  winsByResignation?: number
+  completedMatches?: number
   joinedAt?: unknown
   updatedAt?: unknown
   recentResults: PublicProfileResult[]
@@ -68,12 +68,12 @@ export function subscribeToPublicProfile(
       uid,
       displayName: typeof data.displayName === 'string' ? data.displayName : null,
       photoURL: typeof data.photoURL === 'string' ? data.photoURL : null,
-      wins: typeof data.wins === 'number' ? data.wins : 0,
-      losses: typeof data.losses === 'number' ? data.losses : 0,
-      draws: typeof data.draws === 'number' ? data.draws : 0,
-      resignations: typeof data.resignations === 'number' ? data.resignations : 0,
-      winsByResignation: typeof data.winsByResignation === 'number' ? data.winsByResignation : 0,
-      completedMatches: typeof data.completedMatches === 'number' ? data.completedMatches : 0,
+      wins: typeof data.wins === 'number' ? data.wins : undefined,
+      losses: typeof data.losses === 'number' ? data.losses : undefined,
+      draws: typeof data.draws === 'number' ? data.draws : undefined,
+      resignations: typeof data.resignations === 'number' ? data.resignations : undefined,
+      winsByResignation: typeof data.winsByResignation === 'number' ? data.winsByResignation : undefined,
+      completedMatches: typeof data.completedMatches === 'number' ? data.completedMatches : undefined,
       joinedAt: data.joinedAt,
       updatedAt: data.updatedAt,
       recentResults: Array.isArray(data.recentResults)

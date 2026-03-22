@@ -63,6 +63,35 @@
   background: rgba(0, 0, 0, 0.06);
 }
 
+.icon-close {
+  border: none;
+  background: transparent;
+  color: rgba(20, 24, 33, 0.58);
+  padding: 0;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: 2px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-8px);
+}
+
+.icon-close:hover {
+  color: var(--text);
+}
+
+.icon-close svg {
+  width: 36px;
+  height: 36px;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  fill: none;
+}
+
 .home-content {
   display: flex;
   flex-direction: column;
@@ -158,12 +187,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 24px 24px 0;
+  padding: 14px 14px 0 24px;
 }
 
 .profile-identity {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
 }
 
@@ -1040,8 +1069,4 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-}
-
-.close-btn {
-  padding-inline: 16px;
 }

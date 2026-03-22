@@ -29,7 +29,6 @@ import {
 import {
   subscribeToPublicProfile,
   syncPublicProfileIdentity,
-  type PublicProfileResult,
   type PublicProfile,
 } from './services/publicProfileStore'
 import { signInWithGoogle, signOutUser, subscribeToAuth } from './services/auth'
@@ -558,8 +557,11 @@ function App() {
             </>
           )}
         </div>
-        <button className="btn ghost close-btn" onClick={handleHome} aria-label="Close game">
-          Close
+        <button className="icon-close close-btn" onClick={handleHome} aria-label="Close game">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M5 5 19 19" />
+            <path d="M19 5 5 19" />
+          </svg>
         </button>
       </header>
 
@@ -655,15 +657,11 @@ function App() {
           ) : user ? (
             <>
               <span className="auth-status">
-                {user.photoURL ? (
-                  <img
-                    className="avatar"
-                    src={user.photoURL}
-                    alt={user.displayName ? `${user.displayName} avatar` : 'User avatar'}
-                  />
-                ) : (
-                  <span className="avatar avatar-fallback">{getInitials(user.displayName)}</span>
-                )}
+                <AvatarImage
+                  className="avatar"
+                  name={user.displayName}
+                  photoURL={user.photoURL}
+                />
               </span>
               <button
                 className="toolbar-link"
@@ -922,22 +920,21 @@ function App() {
           <div className="modal-card profile-card">
             <div className="profile-header">
               <div className="profile-identity">
-                {profileTarget.photoURL ? (
-                  <img
-                    className="profile-avatar"
-                    src={profileTarget.photoURL}
-                    alt={profileTarget.name ? `${profileTarget.name} avatar` : 'User avatar'}
-                  />
-                ) : (
-                  <span className="profile-avatar avatar-fallback">{getInitials(profileTarget.name)}</span>
-                )}
+                <AvatarImage
+                  className="profile-avatar"
+                  name={profileTarget.name}
+                  photoURL={profileTarget.photoURL}
+                />
                 <div>
                   <h2>{profileTarget.name ?? 'Player Profile'}</h2>
                   <p>{profile.summaryLabel}</p>
                 </div>
               </div>
-              <button className="btn ghost" onClick={() => setProfileTarget(null)}>
-                Close
+              <button className="icon-close" aria-label="Close profile" onClick={() => setProfileTarget(null)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M5 5 19 19" />
+                  <path d="M19 5 5 19" />
+                </svg>
               </button>
             </div>
 
@@ -945,83 +942,64 @@ function App() {
               <section className="profile-section">
                 <div className="profile-stats">
                   <div className="profile-stat">
-                    <span className="profile-stat-label">{profile.recordLabel}</span>
+                    <span className="profile-stat-label">All-Time Results</span>
                     <strong>{profile.wins}-{profile.losses}-{profile.draws}</strong>
                   </div>
-                  <div className="profile-stat">
-                    <span className="profile-stat-label">{profile.winRateLabel}</span>
-                    <strong>{profile.winRate}</strong>
-                  </div>
-                  <div className="profile-stat">
-                    <span className="profile-stat-label">{profile.activeLabel}</span>
-                    <strong>{profile.activeMatches}</strong>
-                  </div>
-                  <div className="profile-stat">
-                    <span className="profile-stat-label">{profile.waitingLabel}</span>
-                    <strong>{profile.waitingMatches}</strong>
-                  </div>
-                  <div className="profile-stat">
-                    <span className="profile-stat-label">{profile.resignationLabel}</span>
-                    <strong>{profile.resignations}</strong>
-                  </div>
-                  <div className="profile-stat">
-                    <span className="profile-stat-label">{profile.resignationWinsLabel}</span>
-                    <strong>{profile.winsByResignation}</strong>
-                  </div>
                 </div>
               </section>
 
-              <section className="profile-section">
-                <div className="profile-section-header">
-                  <h3>{profile.recentTitle}</h3>
-                  <p>{profile.recentSubtitle}</p>
-                </div>
-                {profile.recentResults.length === 0 ? (
-                  <p className="note">{profile.recentEmptyText}</p>
-                ) : (
-                  <div className="profile-list">
-                    {profile.recentResults.map((result) => (
-                      <div key={result.id} className="profile-row">
-                        <div>
-                          <strong>{result.opponentName}</strong>
-                          <p>{result.summary}</p>
-                        </div>
-                        <div className="profile-row-meta">
-                          <span className={`match-badge ${result.badgeClass}`}>{result.badgeText}</span>
-                          <span>{result.dateText}</span>
-                        </div>
-                      </div>
-                    ))}
+              {profileTarget.mode === 'self' ? (
+                <section className="profile-section">
+                  <div className="profile-section-header">
+                    <h3>Active Matches</h3>
+                    <p>Your currently active online games.</p>
                   </div>
-                )}
-              </section>
-
-              <section className="profile-section">
-                <div className="profile-section-header">
-                  <h3>{profile.headToHeadTitle}</h3>
-                  <p>{profile.headToHeadSubtitle}</p>
-                </div>
-                {profile.headToHead.length === 0 ? (
-                  <p className="note">{profile.headToHeadEmptyText}</p>
-                ) : (
-                  <div className="profile-list">
-                    {profile.headToHead.map((entry) => (
-                      <div key={entry.uid} className="profile-row">
-                        <div>
-                          <strong>{entry.name}</strong>
-                          <p>
-                            {entry.wins}-{entry.losses}-{entry.draws} in {entry.total} match
-                            {entry.total === 1 ? '' : 'es'}
-                          </p>
+                  {profile.activeMatchesList.length === 0 ? (
+                    <p className="note">No active online matches right now.</p>
+                  ) : (
+                    <div className="profile-list">
+                      {profile.activeMatchesList.map((match) => (
+                        <div key={match.id} className="profile-row">
+                          <div>
+                            <strong>{match.opponentName}</strong>
+                            <p>{match.statusText}</p>
+                          </div>
+                          <div className="profile-row-meta">
+                            <span>{match.dateText}</span>
+                          </div>
                         </div>
-                        <div className="profile-row-meta">
-                          <span>{entry.resignationSummary}</span>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ) : (
+                <section className="profile-section">
+                  <div className="profile-section-header">
+                    <h3>Head to Head</h3>
+                    <p>Your record against this player.</p>
                   </div>
-                )}
-              </section>
+                  {profile.headToHead.length === 0 ? (
+                    <p className="note">No completed matches against this player yet.</p>
+                  ) : (
+                    <div className="profile-list">
+                      {profile.headToHead.map((entry) => (
+                        <div key={entry.uid} className="profile-row">
+                          <div>
+                            <strong>{entry.name}</strong>
+                            <p>
+                              {entry.wins}-{entry.losses}-{entry.draws} in {entry.total} match
+                              {entry.total === 1 ? '' : 'es'}
+                            </p>
+                          </div>
+                          <div className="profile-row-meta">
+                            <span>{entry.resignationSummary}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           </div>
         </div>
@@ -1035,6 +1013,36 @@ function getInitials(name?: string | null) {
   const parts = name.trim().split(/\s+/)
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
   return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase()
+}
+
+function AvatarImage({
+  className,
+  name,
+  photoURL,
+}: {
+  className: string
+  name?: string | null
+  photoURL?: string | null
+}) {
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setFailed(false)
+  }, [photoURL])
+
+  if (!photoURL || failed) {
+    return <span className={`${className} avatar-fallback`}>{getInitials(name)}</span>
+  }
+
+  return (
+    <img
+      className={className}
+      src={photoURL}
+      alt={name ? `${name} avatar` : 'User avatar'}
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
+  )
 }
 
 function getOnlinePlayer(match: OnlineMatchState, userId: string | null) {
@@ -1096,14 +1104,9 @@ function buildPlayerProfile(
   const completedMatches = relevantMatches.filter(
     (match) => match.status === 'finished' && Boolean(getOpponent(match, userId))
   )
-  const activeMatches = relevantMatches.filter((match) => match.status === 'active').length
-  const waitingMatches = relevantMatches.filter((match) => match.status === 'waiting').length
-
   let wins = 0
   let losses = 0
   let draws = 0
-  let resignations = 0
-  let winsByResignation = 0
 
   const headToHead = new Map<
     string,
@@ -1131,12 +1134,6 @@ function buildPlayerProfile(
     } else {
       losses += 1
     }
-    if (match.resignedBy === player) {
-      resignations += 1
-    }
-    if (match.resignedBy && match.resignedBy !== player) {
-      winsByResignation += 1
-    }
 
     const existing = headToHead.get(opponent.uid) ?? {
       uid: opponent.uid,
@@ -1157,94 +1154,29 @@ function buildPlayerProfile(
     headToHead.set(opponent.uid, existing)
   })
 
-  const fallbackRecentResults = completedMatches.slice(0, 8).map((match) => {
-    const player = getOnlinePlayer(match, userId)
-    const opponent = getOpponent(match, userId)
-    if (!player || !opponent) return null
-
-    let resultLabel = 'Draw'
-    const badgeClass: 'finished' | 'active' | 'waiting' = 'finished'
-    if (match.winner === player) {
-      resultLabel = 'Win'
-    } else if (match.winner !== 'draw') {
-      resultLabel = 'Loss'
-    }
-
-    const finishText = match.resignedBy
-      ? match.resignedBy === player
-        ? 'You resigned'
-        : 'Opponent resigned'
-      : resultLabel
-
-    return {
-      id: match.id,
-      opponentName: opponent.displayName ?? 'Opponent',
-      summary: finishText,
-      badgeText: resultLabel,
-      badgeClass,
-      dateText: formatMatchDate(match.updatedAt),
-    }
-  }).filter(Boolean) as Array<{
-    id: string
-    opponentName: string
-    summary: string
-    badgeText: string
-    badgeClass: 'finished' | 'active' | 'waiting'
-    dateText: string
-  }>
-
-  const recentResults =
-    publicProfile?.recentResults?.length
-      ? publicProfile.recentResults.map((result) => mapPublicResultToView(result))
-      : fallbackRecentResults
-
   const aggregateWins = publicProfile?.wins ?? wins
   const aggregateLosses = publicProfile?.losses ?? losses
   const aggregateDraws = publicProfile?.draws ?? draws
   const aggregateCompleted = publicProfile?.completedMatches ?? completedMatches.length
-  const aggregateResignations = publicProfile?.resignations ?? resignations
-  const aggregateWinsByResignation = publicProfile?.winsByResignation ?? winsByResignation
-  const winRate =
-    aggregateWins + aggregateLosses + aggregateDraws === 0
-      ? '0%'
-      : `${Math.round((aggregateWins / Math.max(1, aggregateWins + aggregateLosses + aggregateDraws)) * 100)}%`
+  const activeMatchesList = relevantMatches
+    .filter((match) => match.status === 'active')
+    .map((match) => ({
+      id: match.id,
+      opponentName: getOpponent(match, userId)?.displayName ?? 'Opponent',
+      statusText: getOnlineStatusText(match, userId),
+      dateText: formatMatchDate(match.updatedAt),
+    }))
 
   return {
     summaryLabel:
       mode === 'overall'
         ? `${aggregateCompleted} completed online matches`
-        : `${completedMatches.length} shared completed matches`,
-    recordLabel: mode === 'overall' ? 'Record' : 'Record vs You',
-    winRateLabel: mode === 'overall' ? 'Win Rate' : 'Win Rate vs You',
-    activeLabel: mode === 'overall' ? 'Active Matches' : 'Shared Active',
-    waitingLabel: mode === 'overall' ? 'Waiting Matches' : 'Shared Waiting',
-    resignationLabel: mode === 'overall' ? 'Resignations' : 'Resigned vs You',
-    resignationWinsLabel:
-      mode === 'overall' ? 'Wins by Resignation' : 'Wins by Your Resignation',
-    recentTitle: mode === 'overall' ? 'Recent Results' : 'Recent Shared Results',
-    recentSubtitle:
-      mode === 'overall'
-        ? 'Your latest completed online matches.'
-        : 'Latest completed matches between the two of you.',
-    recentEmptyText:
-      mode === 'overall' ? 'No completed online matches yet.' : 'No shared completed matches yet.',
-    headToHeadTitle: mode === 'overall' ? 'Head to Head' : 'Shared Opponents',
-    headToHeadSubtitle:
-      mode === 'overall'
-        ? 'Your all-time record against each opponent.'
-        : 'This player\'s results against opponents from matches you share.',
-    headToHeadEmptyText:
-      mode === 'overall' ? 'No opponent history yet.' : 'No shared opponent history yet.',
+        : `${aggregateCompleted} all-time completed matches`,
     completedMatches: aggregateCompleted,
-    activeMatches,
-    waitingMatches,
     wins: aggregateWins,
     losses: aggregateLosses,
     draws: aggregateDraws,
-    resignations: aggregateResignations,
-    winsByResignation: aggregateWinsByResignation,
-    winRate,
-    recentResults,
+    activeMatchesList,
     headToHead: Array.from(headToHead.values())
       .sort((left, right) => right.total - left.total || right.wins - left.wins)
       .map((entry) => ({
@@ -1254,22 +1186,6 @@ function buildPlayerProfile(
             ? `${entry.winsByResignation} won by resignation, ${entry.resignations} resigned`
             : 'No resignations',
       })),
-  }
-}
-
-function mapPublicResultToView(result: PublicProfileResult) {
-  return {
-    id: result.matchId,
-    opponentName: result.opponentName,
-    summary:
-      result.method === 'resigned'
-        ? result.outcome === 'loss'
-          ? 'You resigned'
-          : 'Opponent resigned'
-        : capitalize(result.outcome),
-    badgeText: capitalize(result.outcome),
-    badgeClass: 'finished' as const,
-    dateText: formatMatchDate(result.playedAt),
   }
 }
 
@@ -1294,10 +1210,6 @@ function formatMatchDate(value: unknown) {
     }).format(value.toDate())
   }
   return 'Recent'
-}
-
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 function BookmarkIcon() {
