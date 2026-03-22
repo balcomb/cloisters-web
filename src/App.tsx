@@ -26,6 +26,12 @@ import {
   subscribeToWaitingMatches,
   type OnlineMatchState,
 } from './services/onlineMatchStore'
+import {
+  subscribeToPublicProfile,
+  syncPublicProfileIdentity,
+  type PublicProfileResult,
+  type PublicProfile,
+} from './services/publicProfileStore'
 import { signInWithGoogle, signOutUser, subscribeToAuth } from './services/auth'
 import type { User } from 'firebase/auth'
 import './App.css'
@@ -38,6 +44,9 @@ type ResumePrompt =
   | null
 
 type GameMode = 'bot' | 'offline' | 'online'
+type ProfileTarget =
+  | { mode: 'self'; uid: string; name: string | null; photoURL: string | null }
+  | { mode: 'opponent'; uid: string; name: string | null; photoURL: string | null }
 
 function App() {
   const [screen, setScreen] = useState<'home' | 'game'>('home')
@@ -76,6 +85,9 @@ function App() {
   const [onlineError, setOnlineError] = useState<string | null>(null)
   const [onlineBusy, setOnlineBusy] = useState(false)
   const [resignPrompt, setResignPrompt] = useState(false)
+  const [howToOpen, setHowToOpen] = useState(false)
+  const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null)
+  const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
   const boardWrapRef = useRef<HTMLDivElement | null>(null)
 
   const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
@@ -105,12 +117,18 @@ function App() {
         setCurrentOnlineMatch(null)
         setCurrentOnlineMatchId(null)
         setResignPrompt(false)
+        setHowToOpen(false)
+        setProfileTarget(null)
+        setPublicProfile(null)
       }
     })
   }, [])
 
   useEffect(() => {
     if (!user) return
+    syncPublicProfileIdentity(user).catch((error) => {
+      console.error('Failed to sync public profile', error)
+    })
     const levels: SkillLevel[] = ['basic', 'advanced']
     levels.forEach((level) => {
       loadBotGame(user.uid, level)
@@ -151,6 +169,14 @@ function App() {
       unsubscribeWaiting()
     }
   }, [user])
+
+  useEffect(() => {
+    if (!profileTarget) return
+    const unsubscribe = subscribeToPublicProfile(profileTarget.uid, setPublicProfile)
+    return () => {
+      unsubscribe()
+    }
+  }, [profileTarget])
 
   useEffect(() => {
     if (screen !== 'game') return
@@ -468,6 +494,15 @@ function App() {
   }, [screen])
 
   const onlinePlayer = currentOnlineMatch ? getOnlinePlayer(currentOnlineMatch, user?.uid ?? null) : null
+  const profile = useMemo(() => {
+    if (!profileTarget) return null
+    if (profileTarget.mode === 'self') {
+      return buildPlayerProfile(profileTarget.uid, onlineMatches, publicProfile, 'overall')
+    }
+    return buildPlayerProfile(profileTarget.uid, onlineMatches, publicProfile, 'shared')
+  }, [profileTarget, onlineMatches, publicProfile])
+  const currentOpponent =
+    currentOnlineMatch && user ? getOpponentProfile(currentOnlineMatch, user.uid) : null
   const canConfirm =
     Boolean(selected) &&
     !isOver &&
@@ -498,12 +533,29 @@ function App() {
         <div className="game-heading">
           <p className="eyebrow">{matchLabel}</p>
           {gameMode === 'online' && (
-            <p className="match-meta">
-              {onlinePlayer && <span>You are {onlinePlayer}</span>}
-              {isOnlineDraft && <span>Make the first move to publish a waiting match</span>}
-              {isOnlineJoinDraft && <span>Make the second move to join this match</span>}
-              {onlineStatus && <span>{onlineStatus}</span>}
-            </p>
+            <>
+              <p className="match-meta">
+                {onlinePlayer && <span>You are {onlinePlayer}</span>}
+                {isOnlineDraft && <span>Make the first move to publish a waiting match</span>}
+                {isOnlineJoinDraft && <span>Make the second move to join this match</span>}
+                {onlineStatus && <span>{onlineStatus}</span>}
+              </p>
+              {currentOpponent && (
+                <button
+                  className="toolbar-link profile-link"
+                  onClick={() =>
+                    setProfileTarget({
+                      mode: 'opponent',
+                      uid: currentOpponent.uid,
+                      name: currentOpponent.displayName,
+                      photoURL: currentOpponent.photoURL,
+                    })
+                  }
+                >
+                  View {currentOpponent.displayName ?? 'Opponent'}
+                </button>
+              )}
+            </>
           )}
         </div>
         <button className="btn ghost close-btn" onClick={handleHome} aria-label="Close game">
@@ -613,6 +665,19 @@ function App() {
                   <span className="avatar avatar-fallback">{getInitials(user.displayName)}</span>
                 )}
               </span>
+              <button
+                className="toolbar-link"
+                onClick={() =>
+                  setProfileTarget({
+                    mode: 'self',
+                    uid: user.uid,
+                    name: user.displayName,
+                    photoURL: user.photoURL,
+                  })
+                }
+              >
+                Profile
+              </button>
               <button className="btn ghost" onClick={() => signOutUser()}>
                 Sign out
               </button>
@@ -648,6 +713,9 @@ function App() {
               </button>
               <button className="btn secondary" onClick={() => void handleCreateOnline()} disabled={onlineBusy}>
                 Start Online Match
+              </button>
+              <button className="btn ghost" onClick={() => setHowToOpen(true)}>
+                How to Play
               </button>
             </div>
             {onlineError && <p className="inline-message error">{onlineError}</p>}
@@ -710,7 +778,7 @@ function App() {
           <section className="panel matches-panel">
             <div className="matches-header">
               <h2>Your Matches</h2>
-              <p>Open an active match or copy its code to invite another player.</p>
+              <p>Open your active, waiting, and completed online matches.</p>
             </div>
             {onlineMatches.length === 0 ? (
               <p className="note">No online matches yet.</p>
@@ -809,6 +877,155 @@ function App() {
           </div>
         </div>
       )}
+
+      {howToOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => setHowToOpen(false)} />
+          <div className="modal-card how-to-card">
+            <div className="how-to-header">
+              <h2>How to Play</h2>
+              <button className="btn ghost" onClick={() => setHowToOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div className="how-to-body">
+              <p>
+                <strong><em>Cloisters</em></strong> is a battle of wits where two players take
+                turns placing pieces on a grid. When all the positions on the grid are occupied,
+                the game ends, and the player with the most points wins.
+              </p>
+
+              <h3>Scoring</h3>
+              <p>
+                In addition to occupying the position where it&apos;s placed, a piece also occupies
+                any open, adjacent positions up, down, left, or right with an extending arm. Each
+                piece has a point value determined by how many extending arms it has. A piece with
+                four arms is worth zero points, and one point is gained for each direction that has
+                no arm, with a maximum of four points for a piece with no arms.
+              </p>
+
+              <h3>Capturing Pieces</h3>
+              <p>
+                Opposing pieces can be captured by surrounding them diagonally with two of your own
+                pieces. Captured pieces automatically have zero arms and are worth four points,
+                following the standard scoring. The player whose piece is captured also loses the
+                points the captured piece was worth before being captured.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {profileTarget && profile && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => setProfileTarget(null)} />
+          <div className="modal-card profile-card">
+            <div className="profile-header">
+              <div className="profile-identity">
+                {profileTarget.photoURL ? (
+                  <img
+                    className="profile-avatar"
+                    src={profileTarget.photoURL}
+                    alt={profileTarget.name ? `${profileTarget.name} avatar` : 'User avatar'}
+                  />
+                ) : (
+                  <span className="profile-avatar avatar-fallback">{getInitials(profileTarget.name)}</span>
+                )}
+                <div>
+                  <h2>{profileTarget.name ?? 'Player Profile'}</h2>
+                  <p>{profile.summaryLabel}</p>
+                </div>
+              </div>
+              <button className="btn ghost" onClick={() => setProfileTarget(null)}>
+                Close
+              </button>
+            </div>
+
+            <div className="profile-body">
+              <section className="profile-section">
+                <div className="profile-stats">
+                  <div className="profile-stat">
+                    <span className="profile-stat-label">{profile.recordLabel}</span>
+                    <strong>{profile.wins}-{profile.losses}-{profile.draws}</strong>
+                  </div>
+                  <div className="profile-stat">
+                    <span className="profile-stat-label">{profile.winRateLabel}</span>
+                    <strong>{profile.winRate}</strong>
+                  </div>
+                  <div className="profile-stat">
+                    <span className="profile-stat-label">{profile.activeLabel}</span>
+                    <strong>{profile.activeMatches}</strong>
+                  </div>
+                  <div className="profile-stat">
+                    <span className="profile-stat-label">{profile.waitingLabel}</span>
+                    <strong>{profile.waitingMatches}</strong>
+                  </div>
+                  <div className="profile-stat">
+                    <span className="profile-stat-label">{profile.resignationLabel}</span>
+                    <strong>{profile.resignations}</strong>
+                  </div>
+                  <div className="profile-stat">
+                    <span className="profile-stat-label">{profile.resignationWinsLabel}</span>
+                    <strong>{profile.winsByResignation}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="profile-section">
+                <div className="profile-section-header">
+                  <h3>{profile.recentTitle}</h3>
+                  <p>{profile.recentSubtitle}</p>
+                </div>
+                {profile.recentResults.length === 0 ? (
+                  <p className="note">{profile.recentEmptyText}</p>
+                ) : (
+                  <div className="profile-list">
+                    {profile.recentResults.map((result) => (
+                      <div key={result.id} className="profile-row">
+                        <div>
+                          <strong>{result.opponentName}</strong>
+                          <p>{result.summary}</p>
+                        </div>
+                        <div className="profile-row-meta">
+                          <span className={`match-badge ${result.badgeClass}`}>{result.badgeText}</span>
+                          <span>{result.dateText}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="profile-section">
+                <div className="profile-section-header">
+                  <h3>{profile.headToHeadTitle}</h3>
+                  <p>{profile.headToHeadSubtitle}</p>
+                </div>
+                {profile.headToHead.length === 0 ? (
+                  <p className="note">{profile.headToHeadEmptyText}</p>
+                ) : (
+                  <div className="profile-list">
+                    {profile.headToHead.map((entry) => (
+                      <div key={entry.uid} className="profile-row">
+                        <div>
+                          <strong>{entry.name}</strong>
+                          <p>
+                            {entry.wins}-{entry.losses}-{entry.draws} in {entry.total} match
+                            {entry.total === 1 ? '' : 'es'}
+                          </p>
+                        </div>
+                        <div className="profile-row-meta">
+                          <span>{entry.resignationSummary}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -865,6 +1082,222 @@ function describeOpponent(match: OnlineMatchState, userId: string) {
   if (player === 'blue') return match.orangePlayer?.displayName ?? 'Waiting for opponent'
   if (player === 'orange') return match.bluePlayer.displayName ?? 'Blue player'
   return `${match.bluePlayer.displayName ?? 'Blue player'} vs ${match.orangePlayer?.displayName ?? 'Orange player'}`
+}
+
+function buildPlayerProfile(
+  userId: string,
+  matches: OnlineMatchState[],
+  publicProfile: PublicProfile | null,
+  mode: 'overall' | 'shared'
+) {
+  const relevantMatches = matches.filter(
+    (match) => match.bluePlayer.uid === userId || match.orangePlayer?.uid === userId
+  )
+  const completedMatches = relevantMatches.filter(
+    (match) => match.status === 'finished' && Boolean(getOpponent(match, userId))
+  )
+  const activeMatches = relevantMatches.filter((match) => match.status === 'active').length
+  const waitingMatches = relevantMatches.filter((match) => match.status === 'waiting').length
+
+  let wins = 0
+  let losses = 0
+  let draws = 0
+  let resignations = 0
+  let winsByResignation = 0
+
+  const headToHead = new Map<
+    string,
+    {
+      uid: string
+      name: string
+      wins: number
+      losses: number
+      draws: number
+      resignations: number
+      winsByResignation: number
+      total: number
+    }
+  >()
+
+  completedMatches.forEach((match) => {
+    const player = getOnlinePlayer(match, userId)
+    const opponent = getOpponent(match, userId)
+    if (!player || !opponent) return
+
+    if (match.winner === player) {
+      wins += 1
+    } else if (match.winner === 'draw') {
+      draws += 1
+    } else {
+      losses += 1
+    }
+    if (match.resignedBy === player) {
+      resignations += 1
+    }
+    if (match.resignedBy && match.resignedBy !== player) {
+      winsByResignation += 1
+    }
+
+    const existing = headToHead.get(opponent.uid) ?? {
+      uid: opponent.uid,
+      name: opponent.displayName ?? 'Opponent',
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      resignations: 0,
+      winsByResignation: 0,
+      total: 0,
+    }
+    if (match.winner === player) existing.wins += 1
+    else if (match.winner === 'draw') existing.draws += 1
+    else existing.losses += 1
+    if (match.resignedBy === player) existing.resignations += 1
+    if (match.resignedBy && match.resignedBy !== player) existing.winsByResignation += 1
+    existing.total += 1
+    headToHead.set(opponent.uid, existing)
+  })
+
+  const fallbackRecentResults = completedMatches.slice(0, 8).map((match) => {
+    const player = getOnlinePlayer(match, userId)
+    const opponent = getOpponent(match, userId)
+    if (!player || !opponent) return null
+
+    let resultLabel = 'Draw'
+    const badgeClass: 'finished' | 'active' | 'waiting' = 'finished'
+    if (match.winner === player) {
+      resultLabel = 'Win'
+    } else if (match.winner !== 'draw') {
+      resultLabel = 'Loss'
+    }
+
+    const finishText = match.resignedBy
+      ? match.resignedBy === player
+        ? 'You resigned'
+        : 'Opponent resigned'
+      : resultLabel
+
+    return {
+      id: match.id,
+      opponentName: opponent.displayName ?? 'Opponent',
+      summary: finishText,
+      badgeText: resultLabel,
+      badgeClass,
+      dateText: formatMatchDate(match.updatedAt),
+    }
+  }).filter(Boolean) as Array<{
+    id: string
+    opponentName: string
+    summary: string
+    badgeText: string
+    badgeClass: 'finished' | 'active' | 'waiting'
+    dateText: string
+  }>
+
+  const recentResults =
+    publicProfile?.recentResults?.length
+      ? publicProfile.recentResults.map((result) => mapPublicResultToView(result))
+      : fallbackRecentResults
+
+  const aggregateWins = publicProfile?.wins ?? wins
+  const aggregateLosses = publicProfile?.losses ?? losses
+  const aggregateDraws = publicProfile?.draws ?? draws
+  const aggregateCompleted = publicProfile?.completedMatches ?? completedMatches.length
+  const aggregateResignations = publicProfile?.resignations ?? resignations
+  const aggregateWinsByResignation = publicProfile?.winsByResignation ?? winsByResignation
+  const winRate =
+    aggregateWins + aggregateLosses + aggregateDraws === 0
+      ? '0%'
+      : `${Math.round((aggregateWins / Math.max(1, aggregateWins + aggregateLosses + aggregateDraws)) * 100)}%`
+
+  return {
+    summaryLabel:
+      mode === 'overall'
+        ? `${aggregateCompleted} completed online matches`
+        : `${completedMatches.length} shared completed matches`,
+    recordLabel: mode === 'overall' ? 'Record' : 'Record vs You',
+    winRateLabel: mode === 'overall' ? 'Win Rate' : 'Win Rate vs You',
+    activeLabel: mode === 'overall' ? 'Active Matches' : 'Shared Active',
+    waitingLabel: mode === 'overall' ? 'Waiting Matches' : 'Shared Waiting',
+    resignationLabel: mode === 'overall' ? 'Resignations' : 'Resigned vs You',
+    resignationWinsLabel:
+      mode === 'overall' ? 'Wins by Resignation' : 'Wins by Your Resignation',
+    recentTitle: mode === 'overall' ? 'Recent Results' : 'Recent Shared Results',
+    recentSubtitle:
+      mode === 'overall'
+        ? 'Your latest completed online matches.'
+        : 'Latest completed matches between the two of you.',
+    recentEmptyText:
+      mode === 'overall' ? 'No completed online matches yet.' : 'No shared completed matches yet.',
+    headToHeadTitle: mode === 'overall' ? 'Head to Head' : 'Shared Opponents',
+    headToHeadSubtitle:
+      mode === 'overall'
+        ? 'Your all-time record against each opponent.'
+        : 'This player\'s results against opponents from matches you share.',
+    headToHeadEmptyText:
+      mode === 'overall' ? 'No opponent history yet.' : 'No shared opponent history yet.',
+    completedMatches: aggregateCompleted,
+    activeMatches,
+    waitingMatches,
+    wins: aggregateWins,
+    losses: aggregateLosses,
+    draws: aggregateDraws,
+    resignations: aggregateResignations,
+    winsByResignation: aggregateWinsByResignation,
+    winRate,
+    recentResults,
+    headToHead: Array.from(headToHead.values())
+      .sort((left, right) => right.total - left.total || right.wins - left.wins)
+      .map((entry) => ({
+        ...entry,
+        resignationSummary:
+          entry.resignations > 0 || entry.winsByResignation > 0
+            ? `${entry.winsByResignation} won by resignation, ${entry.resignations} resigned`
+            : 'No resignations',
+      })),
+  }
+}
+
+function mapPublicResultToView(result: PublicProfileResult) {
+  return {
+    id: result.matchId,
+    opponentName: result.opponentName,
+    summary:
+      result.method === 'resigned'
+        ? result.outcome === 'loss'
+          ? 'You resigned'
+          : 'Opponent resigned'
+        : capitalize(result.outcome),
+    badgeText: capitalize(result.outcome),
+    badgeClass: 'finished' as const,
+    dateText: formatMatchDate(result.playedAt),
+  }
+}
+
+function getOpponentProfile(match: OnlineMatchState, userId: string) {
+  if (match.bluePlayer.uid === userId) return match.orangePlayer
+  if (match.orangePlayer?.uid === userId) return match.bluePlayer
+  return null
+}
+
+function getOpponent(match: OnlineMatchState, userId: string) {
+  if (match.bluePlayer.uid === userId) return match.orangePlayer
+  if (match.orangePlayer?.uid === userId) return match.bluePlayer
+  return null
+}
+
+function formatMatchDate(value: unknown) {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(value.toDate())
+  }
+  return 'Recent'
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 function BookmarkIcon() {
