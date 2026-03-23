@@ -1,7 +1,9 @@
 import {
   Timestamp,
+  collection,
   doc,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
   type Unsubscribe,
@@ -64,23 +66,36 @@ export function subscribeToPublicProfile(
       return
     }
     const data = snap.data()
-    onValue({
-      uid,
-      displayName: typeof data.displayName === 'string' ? data.displayName : null,
-      photoURL: typeof data.photoURL === 'string' ? data.photoURL : null,
-      wins: typeof data.wins === 'number' ? data.wins : undefined,
-      losses: typeof data.losses === 'number' ? data.losses : undefined,
-      draws: typeof data.draws === 'number' ? data.draws : undefined,
-      resignations: typeof data.resignations === 'number' ? data.resignations : undefined,
-      winsByResignation: typeof data.winsByResignation === 'number' ? data.winsByResignation : undefined,
-      completedMatches: typeof data.completedMatches === 'number' ? data.completedMatches : undefined,
-      joinedAt: data.joinedAt,
-      updatedAt: data.updatedAt,
-      recentResults: Array.isArray(data.recentResults)
-        ? (data.recentResults.filter(isPublicProfileResult) as PublicProfileResult[])
-        : [],
-    })
+    onValue(parsePublicProfile(uid, data))
   })
+}
+
+export function subscribeToPublicProfiles(
+  onValue: (profiles: PublicProfile[]) => void
+): Unsubscribe {
+  const ref = query(collection(db, 'publicProfiles'))
+  return onSnapshot(ref, (snap) => {
+    onValue(snap.docs.map((docSnap) => parsePublicProfile(docSnap.id, docSnap.data())))
+  })
+}
+
+function parsePublicProfile(uid: string, data: Record<string, unknown>): PublicProfile {
+  return {
+    uid,
+    displayName: typeof data.displayName === 'string' ? data.displayName : null,
+    photoURL: typeof data.photoURL === 'string' ? data.photoURL : null,
+    wins: typeof data.wins === 'number' ? data.wins : undefined,
+    losses: typeof data.losses === 'number' ? data.losses : undefined,
+    draws: typeof data.draws === 'number' ? data.draws : undefined,
+    resignations: typeof data.resignations === 'number' ? data.resignations : undefined,
+    winsByResignation: typeof data.winsByResignation === 'number' ? data.winsByResignation : undefined,
+    completedMatches: typeof data.completedMatches === 'number' ? data.completedMatches : undefined,
+    joinedAt: data.joinedAt,
+    updatedAt: data.updatedAt,
+    recentResults: Array.isArray(data.recentResults)
+      ? (data.recentResults.filter(isPublicProfileResult) as PublicProfileResult[])
+      : [],
+  }
 }
 
 function isPublicProfileResult(value: unknown): value is PublicProfileResult {

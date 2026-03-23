@@ -155,6 +155,79 @@
   gap: 8px;
 }
 
+.leaderboard-card {
+  gap: 16px;
+}
+
+.leaderboard-header h2,
+.leaderboard-header p {
+  margin: 0;
+}
+
+.leaderboard-header p {
+  color: var(--text-muted);
+}
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(20, 24, 33, 0.08);
+}
+
+.leaderboard-button {
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.leaderboard-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
+}
+
+.leaderboard-rank {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.leaderboard-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.leaderboard-player strong,
+.leaderboard-player p {
+  margin: 0;
+}
+
+.leaderboard-player p {
+  color: var(--text-muted);
+}
+
+.leaderboard-avatar {
+  width: 36px;
+  height: 36px;
+}
+
+.leaderboard-pct {
+  font-size: 20px;
+  font-weight: 700;
+}
+
 .note,
 .inline-message {
   margin: 0;

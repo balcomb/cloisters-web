@@ -28,6 +28,7 @@ import {
 } from './services/onlineMatchStore'
 import {
   subscribeToPublicProfile,
+  subscribeToPublicProfiles,
   syncPublicProfileIdentity,
   type PublicProfile,
 } from './services/publicProfileStore'
@@ -36,6 +37,7 @@ import type { User } from 'firebase/auth'
 import './App.css'
 
 const initialAnchors: Anchor[] = []
+const leaderboardMinimumMatches = 10
 
 type ResumePrompt =
   | { mode: 'bot'; skill: SkillLevel }
@@ -87,6 +89,7 @@ function App() {
   const [howToOpen, setHowToOpen] = useState(false)
   const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null)
   const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
+  const [leaderboardProfiles, setLeaderboardProfiles] = useState<PublicProfile[]>([])
   const boardWrapRef = useRef<HTMLDivElement | null>(null)
 
   const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
@@ -121,6 +124,13 @@ function App() {
         setPublicProfile(null)
       }
     })
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribeToPublicProfiles(setLeaderboardProfiles)
+    return () => {
+      unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -502,6 +512,10 @@ function App() {
   }, [profileTarget, onlineMatches, publicProfile])
   const currentOpponent =
     currentOnlineMatch && user ? getOpponentProfile(currentOnlineMatch, user.uid) : null
+  const leaderboard = useMemo(
+    () => buildLeaderboard(leaderboardProfiles, leaderboardMinimumMatches),
+    [leaderboardProfiles]
+  )
   const canConfirm =
     Boolean(selected) &&
     !isOver &&
@@ -756,6 +770,50 @@ function App() {
               )
             ) : (
               <p className="note">Sign in with Google to browse and join waiting matches.</p>
+            )}
+          </div>
+          <div className="panel home-card leaderboard-card">
+            <div className="leaderboard-header">
+              <div>
+                <h2>Leaderboard</h2>
+                <p>Ranked by all-time win percentage with a {leaderboardMinimumMatches}-match minimum.</p>
+              </div>
+            </div>
+            {leaderboard.length === 0 ? (
+              <p className="note">No qualified players yet.</p>
+            ) : (
+              <div className="leaderboard-list">
+                {leaderboard.map((entry, index) => (
+                  <button
+                    key={entry.uid}
+                    className="leaderboard-row leaderboard-button"
+                    onClick={() =>
+                      setProfileTarget({
+                        mode: user?.uid === entry.uid ? 'self' : 'opponent',
+                        uid: entry.uid,
+                        name: entry.displayName,
+                        photoURL: entry.photoURL,
+                      })
+                    }
+                  >
+                    <div className="leaderboard-rank">{index + 1}</div>
+                    <div className="leaderboard-player">
+                      <AvatarImage
+                        className="avatar leaderboard-avatar"
+                        name={entry.displayName}
+                        photoURL={entry.photoURL}
+                      />
+                      <div>
+                        <strong>{entry.displayName ?? 'Player'}</strong>
+                        <p>
+                          {entry.wins}-{entry.losses}-{entry.draws}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="leaderboard-pct">{formatLeaderboardPct(entry.scorePct)}</div>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
           <div className="panel home-card">
@@ -1210,6 +1268,37 @@ function formatMatchDate(value: unknown) {
     }).format(value.toDate())
   }
   return 'Recent'
+}
+
+function buildLeaderboard(profiles: PublicProfile[], minimumMatches: number) {
+  return profiles
+    .map((profile) => {
+      const wins = profile.wins ?? 0
+      const losses = profile.losses ?? 0
+      const draws = profile.draws ?? 0
+      const completedMatches = profile.completedMatches ?? wins + losses + draws
+      const scorePct = completedMatches > 0 ? (wins + draws * 0.5) / completedMatches : 0
+      return {
+        uid: profile.uid,
+        displayName: profile.displayName,
+        photoURL: profile.photoURL,
+        wins,
+        losses,
+        draws,
+        completedMatches,
+        scorePct,
+      }
+    })
+    .filter((profile) => profile.completedMatches >= minimumMatches)
+    .sort((left, right) => {
+      if (right.scorePct !== left.scorePct) return right.scorePct - left.scorePct
+      if (right.wins !== left.wins) return right.wins - left.wins
+      return left.losses - right.losses
+    })
+}
+
+function formatLeaderboardPct(value: number) {
+  return `${(value * 100).toFixed(1)}%`
 }
 
 function BookmarkIcon() {
