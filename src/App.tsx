@@ -34,6 +34,7 @@ import {
 } from './services/publicProfileStore'
 import { signInWithGoogle, signOutUser, subscribeToAuth } from './services/auth'
 import type { User } from 'firebase/auth'
+import cloistersLogo from './assets/cloisters-logo.svg'
 import './App.css'
 
 const initialAnchors: Anchor[] = []
@@ -659,26 +660,16 @@ function App() {
     <div className="app home">
       <header className="toolbar">
         <div className="toolbar-left">
-          <span className="brand">Cloisters</span>
-          <span className="toolbar-sep" />
-          <button className="toolbar-link" onClick={handleHome}>
-            Home
-          </button>
+          <img className="brand-logo toolbar-logo" src={cloistersLogo} alt="Cloisters" />
         </div>
         <div className="toolbar-right">
           {authLoading ? (
             <span className="auth-status">Checking sign-in...</span>
           ) : user ? (
             <>
-              <span className="auth-status">
-                <AvatarImage
-                  className="avatar"
-                  name={user.displayName}
-                  photoURL={user.photoURL}
-                />
-              </span>
               <button
-                className="toolbar-link"
+                className="avatar-button"
+                aria-label="Open profile"
                 onClick={() =>
                   setProfileTarget({
                     mode: 'self',
@@ -688,10 +679,11 @@ function App() {
                   })
                 }
               >
-                Profile
-              </button>
-              <button className="btn ghost" onClick={() => signOutUser()}>
-                Sign out
+                <AvatarImage
+                  className="avatar"
+                  name={user.displayName}
+                  photoURL={user.photoURL}
+                />
               </button>
             </>
           ) : (
@@ -703,163 +695,169 @@ function App() {
       </header>
 
       <div className="home-content">
-        <header className="home-header">
-          <div>
-            <p className="eyebrow">Cloisters</p>
-            <h1>Play the modern classic.</h1>
-            <p className="subhead">
-              A web-first take on the original strategy game with local, bot, and online matches.
-            </p>
-            <div className="home-actions">
-              <button className="btn primary" onClick={() => handleStartBot('basic')}>
-                Play Bot (Basic)
-                {savedBySkill.basic && <BookmarkIcon />}
-              </button>
-              <button className="btn secondary" onClick={() => handleStartBot('advanced')}>
-                Play Bot (Advanced)
-                {savedBySkill.advanced && <BookmarkIcon />}
-              </button>
-              <button className="btn ghost" onClick={handleStartOffline}>
-                Play Offline
-                {savedOffline && <BookmarkIcon />}
-              </button>
-              <button className="btn secondary" onClick={() => void handleCreateOnline()} disabled={onlineBusy}>
-                Start Online Match
-              </button>
-              <button className="btn ghost" onClick={() => setHowToOpen(true)}>
+        <header className="home-header simple">
+          <div />
+        </header>
+
+        <main className="home-layout">
+          <section className="panel action-panel">
+            <div className="play-section">
+              <div className="play-section-header">
+                <h3>Play a Person</h3>
+              </div>
+              <div className="home-actions stacked">
+                <div className="button-with-note">
+                  <button
+                    className="btn secondary"
+                    onClick={() => void handleCreateOnline()}
+                    disabled={onlineBusy || !user}
+                  >
+                    Online
+                  </button>
+                  {!user && <p className="play-note">Sign in with Google to play online.</p>}
+                </div>
+                <button className="btn secondary" onClick={handleStartOffline}>
+                  Offline
+                  {savedOffline && <BookmarkIcon />}
+                </button>
+              </div>
+            </div>
+            <div className="play-section">
+              <div className="play-section-header">
+                <h3>Play a Bot</h3>
+              </div>
+              <div className="home-actions stacked">
+                <button className="btn secondary" onClick={() => handleStartBot('basic')}>
+                  Basic
+                  {savedBySkill.basic && <BookmarkIcon />}
+                </button>
+                <button className="btn secondary" onClick={() => handleStartBot('advanced')}>
+                  Advanced
+                  {savedBySkill.advanced && <BookmarkIcon />}
+                </button>
+              </div>
+            </div>
+            <div className="home-actions stacked secondary-actions">
+              <button className="btn secondary" onClick={() => setHowToOpen(true)}>
                 How to Play
               </button>
             </div>
             {onlineError && <p className="inline-message error">{onlineError}</p>}
-          </div>
-          <div className="home-preview">
-            <div className="panel home-card">
-              <h2>Async Matches</h2>
-              <p>Start with the first move, leave the match open, and let another player join from the lobby.</p>
-            </div>
-          </div>
-        </header>
+          </section>
 
-        <main className="home-main">
-          <div className="panel home-card">
-            <h2>Open Games</h2>
-            <p>Browse waiting matches and join as orange after the creator has placed the opening move.</p>
-            {user ? (
-              waitingMatches.length === 0 ? (
-                <p className="note">No waiting matches right now.</p>
-              ) : (
-                <div className="match-list compact">
-                  {waitingMatches.map((match) => (
-                    <button
-                      key={match.id}
-                      className="match-card"
-                      onClick={() => void handleJoinOnline(match)}
-                      disabled={onlineBusy}
-                    >
-                      <span className="match-card-top">
-                        <strong>{match.bluePlayer.displayName ?? 'Blue player'}</strong>
-                        <span className="match-badge waiting">waiting</span>
-                      </span>
-                      <span className="match-card-bottom">
-                        <span>Blue to start complete</span>
-                        <span>Join as orange</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )
-            ) : (
-              <p className="note">Sign in with Google to browse and join waiting matches.</p>
-            )}
-          </div>
-          <div className="panel home-card leaderboard-card">
-            <div className="leaderboard-header">
-              <div>
-                <h2>Leaderboard</h2>
-                <p>Ranked by all-time win percentage with a {leaderboardMinimumMatches}-match minimum.</p>
-              </div>
-            </div>
-            {leaderboard.length === 0 ? (
-              <p className="note">No qualified players yet.</p>
-            ) : (
-              <div className="leaderboard-list">
-                {leaderboard.map((entry, index) => (
-                  <button
-                    key={entry.uid}
-                    className="leaderboard-row leaderboard-button"
-                    onClick={() =>
-                      setProfileTarget({
-                        mode: user?.uid === entry.uid ? 'self' : 'opponent',
-                        uid: entry.uid,
-                        name: entry.displayName,
-                        photoURL: entry.photoURL,
-                      })
-                    }
-                  >
-                    <div className="leaderboard-rank">{index + 1}</div>
-                    <div className="leaderboard-player">
-                      <AvatarImage
-                        className="avatar leaderboard-avatar"
-                        name={entry.displayName}
-                        photoURL={entry.photoURL}
-                      />
-                      <div>
-                        <strong>{entry.displayName ?? 'Player'}</strong>
-                        <p>
-                          {entry.wins}-{entry.losses}-{entry.draws}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="leaderboard-pct">{formatLeaderboardPct(entry.scorePct)}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="panel home-card">
-            <h2>Local Match</h2>
-            <p>Play on a single device with alternating turns.</p>
-          </div>
-          <div className="panel home-card">
-            <h2>Automaton</h2>
-            <p>Basic and advanced difficulty are ready for practice.</p>
-          </div>
-          <div className="panel home-card">
-            <h2>Captures</h2>
-            <p>Diagonal capture rules and scoring are active.</p>
-          </div>
-        </main>
-
-        {user && (
           <section className="panel matches-panel">
             <div className="matches-header">
-              <h2>Your Matches</h2>
-              <p>Open your active, waiting, and completed online matches.</p>
+              <h2>Matches</h2>
+              <p>Active games for you, plus open games waiting for a second player.</p>
             </div>
-            {onlineMatches.length === 0 ? (
-              <p className="note">No online matches yet.</p>
+
+            {user ? (
+              <>
+                <div className="matches-group">
+                  <h3>Your Active Matches</h3>
+                  {onlineMatches.filter((match) => match.status !== 'finished').length === 0 ? (
+                    <p className="note">No active or waiting matches right now.</p>
+                  ) : (
+                    <div className="match-list compact">
+                      {onlineMatches
+                        .filter((match) => match.status !== 'finished')
+                        .map((match) => (
+                          <button
+                            key={match.id}
+                            className="match-card"
+                            onClick={() => handleOpenOnlineMatch(match)}
+                          >
+                            <span className="match-card-top">
+                              <strong>{describeOpponent(match, user.uid)}</strong>
+                              <span className={`match-badge ${match.status}`}>{match.status}</span>
+                            </span>
+                            <span className="match-card-bottom">
+                              <span>{match.status === 'waiting' ? 'Opening move submitted' : 'Remote match'}</span>
+                              <span>{getOnlineStatusText(match, user.uid)}</span>
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="matches-group">
+                  <h3>Waiting for a Player</h3>
+                  {waitingMatches.length === 0 ? (
+                    <p className="note">No waiting matches right now.</p>
+                  ) : (
+                    <div className="match-list compact">
+                      {waitingMatches.map((match) => (
+                        <button
+                          key={match.id}
+                          className="match-card"
+                          onClick={() => void handleJoinOnline(match)}
+                          disabled={onlineBusy}
+                        >
+                          <span className="match-card-top">
+                            <strong>{match.bluePlayer.displayName ?? 'Blue player'}</strong>
+                            <span className="match-badge waiting">waiting</span>
+                          </span>
+                          <span className="match-card-bottom">
+                            <span>Blue to start complete</span>
+                            <span>Join as orange</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="matches-group">
+                  <div className="leaderboard-header">
+                    <div>
+                      <h3>Leaderboard</h3>
+                      <p>Ranked by all-time win percentage with a {leaderboardMinimumMatches}-match minimum.</p>
+                    </div>
+                  </div>
+                  {leaderboard.length === 0 ? (
+                    <p className="note">No qualified players yet.</p>
+                  ) : (
+                    <div className="leaderboard-list">
+                      {leaderboard.map((entry, index) => (
+                        <button
+                          key={entry.uid}
+                          className="leaderboard-row leaderboard-button"
+                          onClick={() =>
+                            setProfileTarget({
+                              mode: user?.uid === entry.uid ? 'self' : 'opponent',
+                              uid: entry.uid,
+                              name: entry.displayName,
+                              photoURL: entry.photoURL,
+                            })
+                          }
+                        >
+                          <div className="leaderboard-rank">{index + 1}</div>
+                          <div className="leaderboard-player">
+                            <AvatarImage
+                              className="avatar leaderboard-avatar"
+                              name={entry.displayName}
+                              photoURL={entry.photoURL}
+                            />
+                            <div>
+                              <strong>{entry.displayName ?? 'Player'}</strong>
+                              <p>
+                                {entry.wins}-{entry.losses}-{entry.draws}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="leaderboard-pct">{formatLeaderboardPct(entry.scorePct)}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
-              <div className="match-list">
-                {onlineMatches.map((match) => (
-                  <button
-                    key={match.id}
-                    className="match-card"
-                    onClick={() => handleOpenOnlineMatch(match)}
-                  >
-                    <span className="match-card-top">
-                      <strong>{describeOpponent(match, user.uid)}</strong>
-                      <span className={`match-badge ${match.status}`}>{match.status}</span>
-                    </span>
-                    <span className="match-card-bottom">
-                      <span>{match.status === 'waiting' ? 'Opening move submitted' : 'Remote match'}</span>
-                      <span>{getOnlineStatusText(match, user.uid)}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+              <p className="note">Sign in with Google to view your matches and join waiting games.</p>
             )}
           </section>
-        )}
+        </main>
       </div>
 
       {screen === 'game' && (
@@ -940,8 +938,11 @@ function App() {
           <div className="modal-card how-to-card">
             <div className="how-to-header">
               <h2>How to Play</h2>
-              <button className="btn ghost" onClick={() => setHowToOpen(false)}>
-                Close
+              <button className="icon-close" aria-label="Close how to play" onClick={() => setHowToOpen(false)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M5 5 19 19" />
+                  <path d="M19 5 5 19" />
+                </svg>
               </button>
             </div>
             <div className="how-to-body">
@@ -1007,29 +1008,36 @@ function App() {
               </section>
 
               {profileTarget.mode === 'self' ? (
-                <section className="profile-section">
-                  <div className="profile-section-header">
-                    <h3>Active Matches</h3>
-                    <p>Your currently active online games.</p>
-                  </div>
-                  {profile.activeMatchesList.length === 0 ? (
-                    <p className="note">No active online matches right now.</p>
-                  ) : (
-                    <div className="profile-list">
-                      {profile.activeMatchesList.map((match) => (
-                        <div key={match.id} className="profile-row">
-                          <div>
-                            <strong>{match.opponentName}</strong>
-                            <p>{match.statusText}</p>
-                          </div>
-                          <div className="profile-row-meta">
-                            <span>{match.dateText}</span>
-                          </div>
-                        </div>
-                      ))}
+                <>
+                  <section className="profile-section">
+                    <div className="profile-section-header">
+                      <h3>Active Matches</h3>
+                      <p>Your currently active online games.</p>
                     </div>
-                  )}
-                </section>
+                    {profile.activeMatchesList.length === 0 ? (
+                      <p className="note">No active online matches right now.</p>
+                    ) : (
+                      <div className="profile-list">
+                        {profile.activeMatchesList.map((match) => (
+                          <div key={match.id} className="profile-row">
+                            <div>
+                              <strong>{match.opponentName}</strong>
+                              <p>{match.statusText}</p>
+                            </div>
+                            <div className="profile-row-meta">
+                              <span>{match.dateText}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                  <section className="profile-section profile-actions">
+                    <button className="btn ghost" onClick={() => signOutUser()}>
+                      Sign out
+                    </button>
+                  </section>
+                </>
               ) : (
                 <section className="profile-section">
                   <div className="profile-section-header">

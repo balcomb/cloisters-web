@@ -14,7 +14,7 @@
 
   font-family: 'Space Grotesk', system-ui, sans-serif;
   color: var(--text);
-  background: radial-gradient(circle at top, #f9fafc 0%, var(--bg) 55%, #c7c9d2 100%);
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
