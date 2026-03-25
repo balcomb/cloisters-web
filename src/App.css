@@ -592,6 +592,15 @@
   margin-left: auto;
 }
 
+.match-card-status.your-turn {
+  color: #8a6a10;
+  font-weight: 700;
+  background: rgba(242, 201, 76, 0.24);
+  border: 1px solid rgba(242, 201, 76, 0.42);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
 .match-avatar {
   width: 24px;
   height: 24px;

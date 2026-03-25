@@ -863,7 +863,13 @@ function App() {
                                 />
                                 <strong>{getMatchCardName(match, user)}</strong>
                               </span>
-                              <span className="match-card-status">{getOnlineStatusText(match, user.uid)}</span>
+                              <span
+                                className={`match-card-status${
+                                  getOnlineStatusText(match, user.uid) === 'Your turn' ? ' your-turn' : ''
+                                }`}
+                              >
+                                {getOnlineStatusText(match, user.uid)}
+                              </span>
                             </span>
                           </button>
                         ))}
