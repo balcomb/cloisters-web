@@ -840,12 +840,11 @@ function App() {
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-backdrop" onClick={() => setResumePrompt(null)} />
           <div className="modal-card">
-            <h2>Resume saved game?</h2>
+            <h2>Last game saved</h2>
             <p>
-              {resumePrompt.mode === 'bot'
-                ? `You have a saved ${resumePrompt.skill} bot game.`
-                : 'You have a saved offline game.'}{' '}
-              Would you like to resume it or start a new one?
+              Would you like to resume the saved{' '}
+              {resumePrompt.mode === 'bot' ? `${resumePrompt.skill} bot` : 'offline'} game or
+              start a new one?
             </p>
             <div className="modal-actions">
               <button className="btn primary" onClick={handleResume}>
