@@ -125,7 +125,13 @@
   align-items: stretch;
 }
 
-.home-actions.stacked .btn {
+.home-actions.stacked .btn,
+.matches-group > .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.button-with-note > .btn {
   width: 100%;
   justify-content: center;
 }
@@ -184,9 +190,10 @@
 
 .home-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  grid-template-columns: 400px 600px;
   gap: 24px;
   align-items: start;
+  justify-content: center;
 }
 
 .home-card {
@@ -198,6 +205,14 @@
 .action-panel,
 .matches-panel {
   gap: 20px;
+}
+
+.action-panel {
+  width: 100%;
+}
+
+.matches-panel {
+  width: 100%;
 }
 
 .play-section {
@@ -344,7 +359,7 @@
 
 .matches-group h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .profile-card {
@@ -505,6 +520,12 @@
 @media (max-width: 960px) {
   .home-layout {
     grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .action-panel,
+  .matches-panel {
+    max-width: 400px;
   }
 }
 
@@ -540,7 +561,6 @@
 .match-card-bottom,
 .match-meta {
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   justify-content: space-between;
@@ -550,6 +570,31 @@
 .match-meta {
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.match-card-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.match-card-identity strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-card-status {
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.match-avatar {
+  width: 24px;
+  height: 24px;
 }
 
 .match-badge {

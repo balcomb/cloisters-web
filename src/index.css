@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
   --bg: #d6d8de;
@@ -34,13 +34,13 @@ body {
 }
 
 h1 {
-  font-family: 'Fraunces', serif;
   font-size: clamp(32px, 4vw, 56px);
+  font-weight: 700;
   margin: 0 0 12px;
 }
 
 h2 {
-  font-family: 'Fraunces', serif;
+  font-weight: 700;
 }
 
 p {

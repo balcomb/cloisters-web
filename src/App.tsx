@@ -88,6 +88,7 @@ function App() {
   const [onlineBusy, setOnlineBusy] = useState(false)
   const [resignPrompt, setResignPrompt] = useState(false)
   const [howToOpen, setHowToOpen] = useState(false)
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false)
   const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null)
   const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
   const [leaderboardProfiles, setLeaderboardProfiles] = useState<PublicProfile[]>([])
@@ -748,13 +749,12 @@ function App() {
           <section className="panel matches-panel">
             <div className="matches-header">
               <h2>Matches</h2>
-              <p>Active games for you, plus open games waiting for a second player.</p>
             </div>
 
             {user ? (
               <>
                 <div className="matches-group">
-                  <h3>Your Active Matches</h3>
+                  <h3>In Progress</h3>
                   {onlineMatches.filter((match) => match.status !== 'finished').length === 0 ? (
                     <p className="note">No active or waiting matches right now.</p>
                   ) : (
@@ -768,12 +768,15 @@ function App() {
                             onClick={() => handleOpenOnlineMatch(match)}
                           >
                             <span className="match-card-top">
-                              <strong>{describeOpponent(match, user.uid)}</strong>
-                              <span className={`match-badge ${match.status}`}>{match.status}</span>
-                            </span>
-                            <span className="match-card-bottom">
-                              <span>{match.status === 'waiting' ? 'Opening move submitted' : 'Remote match'}</span>
-                              <span>{getOnlineStatusText(match, user.uid)}</span>
+                              <span className="match-card-identity">
+                                <AvatarImage
+                                  className="avatar match-avatar"
+                                  name={getMatchCardName(match, user)}
+                                  photoURL={getMatchCardPhotoURL(match, user.uid)}
+                                />
+                                <strong>{getMatchCardName(match, user)}</strong>
+                              </span>
+                              <span className="match-card-status">{getOnlineStatusText(match, user.uid)}</span>
                             </span>
                           </button>
                         ))}
@@ -782,9 +785,9 @@ function App() {
                 </div>
 
                 <div className="matches-group">
-                  <h3>Waiting for a Player</h3>
+                  <h3>Open</h3>
                   {waitingMatches.length === 0 ? (
-                    <p className="note">No waiting matches right now.</p>
+                    <p className="note">No matches to join right now.</p>
                   ) : (
                     <div className="match-list compact">
                       {waitingMatches.map((match) => (
@@ -795,12 +798,15 @@ function App() {
                           disabled={onlineBusy}
                         >
                           <span className="match-card-top">
-                            <strong>{match.bluePlayer.displayName ?? 'Blue player'}</strong>
-                            <span className="match-badge waiting">waiting</span>
-                          </span>
-                          <span className="match-card-bottom">
-                            <span>Blue to start complete</span>
-                            <span>Join as orange</span>
+                            <span className="match-card-identity">
+                              <AvatarImage
+                                className="avatar match-avatar"
+                                name={match.bluePlayer.displayName}
+                                photoURL={match.bluePlayer.photoURL}
+                              />
+                              <strong>{match.bluePlayer.displayName ?? 'Blue player'}</strong>
+                            </span>
+                            <span className="match-card-status">Make a move to join</span>
                           </span>
                         </button>
                       ))}
@@ -809,47 +815,10 @@ function App() {
                 </div>
 
                 <div className="matches-group">
-                  <div className="leaderboard-header">
-                    <div>
-                      <h3>Leaderboard</h3>
-                      <p>Ranked by all-time win percentage with a {leaderboardMinimumMatches}-match minimum.</p>
-                    </div>
-                  </div>
-                  {leaderboard.length === 0 ? (
-                    <p className="note">No qualified players yet.</p>
-                  ) : (
-                    <div className="leaderboard-list">
-                      {leaderboard.map((entry, index) => (
-                        <button
-                          key={entry.uid}
-                          className="leaderboard-row leaderboard-button"
-                          onClick={() =>
-                            setProfileTarget({
-                              mode: user?.uid === entry.uid ? 'self' : 'opponent',
-                              uid: entry.uid,
-                              name: entry.displayName,
-                              photoURL: entry.photoURL,
-                            })
-                          }
-                        >
-                          <div className="leaderboard-rank">{index + 1}</div>
-                          <div className="leaderboard-player">
-                            <AvatarImage
-                              className="avatar leaderboard-avatar"
-                              name={entry.displayName}
-                              photoURL={entry.photoURL}
-                            />
-                            <div>
-                              <strong>{entry.displayName ?? 'Player'}</strong>
-                              <p>
-                                {entry.wins}-{entry.losses}-{entry.draws}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="leaderboard-pct">{formatLeaderboardPct(entry.scorePct)}</div>
-                        </button>
-                      ))}
-                    </div>
+                  {leaderboard.length > 0 && (
+                    <button className="btn secondary" onClick={() => setLeaderboardOpen(true)}>
+                      Leaderboard
+                    </button>
                   )}
                 </div>
               </>
@@ -968,6 +937,65 @@ function App() {
                 following the standard scoring. The player whose piece is captured also loses the
                 points the captured piece was worth before being captured.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {leaderboardOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => setLeaderboardOpen(false)} />
+          <div className="modal-card how-to-card">
+            <div className="how-to-header">
+              <h2>Leaderboard</h2>
+              <button className="icon-close" aria-label="Close leaderboard" onClick={() => setLeaderboardOpen(false)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M5 5 19 19" />
+                  <path d="M19 5 5 19" />
+                </svg>
+              </button>
+            </div>
+            <div className="how-to-body">
+              <p>
+                Players are ranked by all-time win percentage. To qualify, a player must complete at least{' '}
+                {leaderboardMinimumMatches} online matches.
+              </p>
+              {leaderboard.length === 0 ? (
+                <p>No qualified players yet.</p>
+              ) : (
+                <div className="leaderboard-list">
+                  {leaderboard.map((entry, index) => (
+                    <button
+                      key={entry.uid}
+                      className="leaderboard-row leaderboard-button"
+                      onClick={() =>
+                        setProfileTarget({
+                          mode: user?.uid === entry.uid ? 'self' : 'opponent',
+                          uid: entry.uid,
+                          name: entry.displayName,
+                          photoURL: entry.photoURL,
+                        })
+                      }
+                    >
+                      <div className="leaderboard-rank">{index + 1}</div>
+                      <div className="leaderboard-player">
+                        <AvatarImage
+                          className="avatar leaderboard-avatar"
+                          name={entry.displayName}
+                          photoURL={entry.photoURL}
+                        />
+                        <div>
+                          <strong>{entry.displayName ?? 'Player'}</strong>
+                          <p>
+                            {entry.wins}-{entry.losses}-{entry.draws}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="leaderboard-pct">{formatLeaderboardPct(entry.scorePct)}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1148,7 +1176,7 @@ function getOnlineStatusText(match: OnlineMatchState | null, userId: string | nu
   const active = match.activePlayer === 'blue' ? match.bluePlayer : match.orangePlayer
   if (!active) return 'Waiting for opponent'
   if (active.uid === userId) return 'Your turn'
-  return `${active.displayName ?? 'Opponent'} to move`
+  return 'Their turn'
 }
 
 function describeOpponent(match: OnlineMatchState, userId: string) {
@@ -1156,6 +1184,30 @@ function describeOpponent(match: OnlineMatchState, userId: string) {
   if (player === 'blue') return match.orangePlayer?.displayName ?? 'Waiting for opponent'
   if (player === 'orange') return match.bluePlayer.displayName ?? 'Blue player'
   return `${match.bluePlayer.displayName ?? 'Blue player'} vs ${match.orangePlayer?.displayName ?? 'Orange player'}`
+}
+
+function getMatchCardName(match: OnlineMatchState, user: User | null) {
+  if (
+    user &&
+    match.status === 'waiting' &&
+    match.bluePlayer.uid === user.uid &&
+    !match.orangePlayer
+  ) {
+    return 'You'
+  }
+  return describeOpponent(match, user?.uid ?? '')
+}
+
+function getMatchCardPhotoURL(match: OnlineMatchState, userId: string | null) {
+  if (
+    userId &&
+    match.status === 'waiting' &&
+    match.bluePlayer.uid === userId &&
+    !match.orangePlayer
+  ) {
+    return match.bluePlayer.photoURL
+  }
+  return getOpponent(match, userId ?? '')?.photoURL ?? null
 }
 
 function buildPlayerProfile(
