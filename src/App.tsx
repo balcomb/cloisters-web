@@ -525,9 +525,11 @@ function App() {
     (isOnlineDraft ||
       isOnlineJoinDraft ||
       canPlayTurn(gameMode, activePlayer, currentOnlineMatch, user?.uid ?? null))
+  const moveControlsInactive = !selected
+  const canClear = Boolean(selected)
   const matchLabel =
     gameMode === 'bot'
-      ? 'Bot Match'
+      ? `Bot Match · ${skillLevel === 'basic' ? 'Basic' : 'Advanced'}`
       : gameMode === 'offline'
         ? 'Offline Match'
         : isOnlineDraft
@@ -535,12 +537,20 @@ function App() {
         : isOnlineJoinDraft
           ? 'Join Online Match'
         : currentOnlineMatch?.status === 'waiting'
-          ? 'Online Match Waiting'
+          ? 'Online Match · Waiting'
           : 'Online Match'
-  const onlineStatus = getOnlineStatusText(currentOnlineMatch, user?.uid ?? null)
   const canResign =
     gameMode === 'online' &&
     Boolean(currentOnlineMatchId && currentOnlineMatch && currentOnlineMatch.status !== 'finished')
+  const isWaitingOwnerMatch =
+    gameMode === 'online' &&
+    Boolean(
+      currentOnlineMatch &&
+        currentOnlineMatch.status === 'waiting' &&
+        user &&
+        currentOnlineMatch.bluePlayer.uid === user.uid &&
+        !currentOnlineMatch.orangePlayer
+    )
 
   const gameView = (
     <div className="game-shell">
@@ -550,26 +560,9 @@ function App() {
           {gameMode === 'online' && (
             <>
               <p className="match-meta">
-                {onlinePlayer && <span>You are {onlinePlayer}</span>}
                 {isOnlineDraft && <span>Make the first move to publish a waiting match</span>}
                 {isOnlineJoinDraft && <span>Make the second move to join this match</span>}
-                {onlineStatus && <span>{onlineStatus}</span>}
               </p>
-              {currentOpponent && (
-                <button
-                  className="toolbar-link profile-link"
-                  onClick={() =>
-                    setProfileTarget({
-                      mode: 'opponent',
-                      uid: currentOpponent.uid,
-                      name: currentOpponent.displayName,
-                      photoURL: currentOpponent.photoURL,
-                    })
-                  }
-                >
-                  View {currentOpponent.displayName ?? 'Opponent'}
-                </button>
-              )}
             </>
           )}
         </div>
@@ -582,6 +575,39 @@ function App() {
       </header>
 
       <div className="score-bar">
+        {gameMode === 'online' && currentOnlineMatch && (
+          <div className="score-player score-player-blue">
+            {currentOpponent?.uid === currentOnlineMatch.bluePlayer.uid ? (
+              <button
+                className="avatar-button score-avatar-button"
+                aria-label={`Open ${currentOnlineMatch.bluePlayer.displayName ?? 'opponent'} profile`}
+                onClick={() =>
+                  setProfileTarget({
+                    mode: 'opponent',
+                    uid: currentOnlineMatch.bluePlayer.uid,
+                    name: currentOnlineMatch.bluePlayer.displayName,
+                    photoURL: currentOnlineMatch.bluePlayer.photoURL,
+                  })
+                }
+              >
+                <AvatarImage
+                  className="avatar score-avatar"
+                  name={currentOnlineMatch.bluePlayer.displayName}
+                  photoURL={currentOnlineMatch.bluePlayer.photoURL}
+                />
+              </button>
+            ) : (
+              <div className="score-avatar-wrap">
+                <AvatarImage
+                  className="avatar score-avatar"
+                  name={currentOnlineMatch.bluePlayer.displayName}
+                  photoURL={currentOnlineMatch.bluePlayer.photoURL}
+                />
+                <span className="score-you-pill">You</span>
+              </div>
+            )}
+          </div>
+        )}
         <div className={`score blue${activePlayer === 'blue' ? ' active' : ''}`}>
           <span className="dot" />
           <strong>{scores.blue}</strong>
@@ -590,6 +616,42 @@ function App() {
           <span className="dot" />
           <strong>{scores.orange}</strong>
         </div>
+        {gameMode === 'online' && currentOnlineMatch?.orangePlayer && (
+          <div className="score-player score-player-orange">
+            {currentOpponent?.uid === currentOnlineMatch.orangePlayer.uid ? (
+              <button
+                className="avatar-button score-avatar-button"
+                aria-label={`Open ${currentOnlineMatch.orangePlayer.displayName ?? 'opponent'} profile`}
+                onClick={() =>
+                  setProfileTarget({
+                    mode: 'opponent',
+                    uid: currentOnlineMatch.orangePlayer!.uid,
+                    name: currentOnlineMatch.orangePlayer!.displayName,
+                    photoURL: currentOnlineMatch.orangePlayer!.photoURL,
+                  })
+                }
+              >
+                <AvatarImage
+                  className="avatar score-avatar"
+                  name={currentOnlineMatch.orangePlayer.displayName}
+                  photoURL={currentOnlineMatch.orangePlayer.photoURL}
+                />
+              </button>
+            ) : (
+              <div className="score-avatar-wrap">
+                <AvatarImage
+                  className="avatar score-avatar"
+                  name={currentOnlineMatch.orangePlayer.displayName}
+                  photoURL={currentOnlineMatch.orangePlayer.photoURL}
+                />
+                <span className="score-you-pill">You</span>
+              </div>
+            )}
+          </div>
+        )}
+        {gameMode === 'online' && currentOnlineMatch && !currentOnlineMatch.orangePlayer && (
+          <span className="score-avatar-placeholder" aria-hidden="true" />
+        )}
       </div>
 
       <div className="board-wrap" ref={boardWrapRef}>
@@ -642,18 +704,43 @@ function App() {
       </div>
 
       <div className="action-row">
-        <button className="btn primary" disabled={!canConfirm} onClick={() => void handleConfirm()}>
-          Confirm Move
+        <button
+          className={`btn icon-action-btn confirm-btn${moveControlsInactive ? ' inactive-action' : ''}`}
+          disabled={!canConfirm}
+          onClick={() => void handleConfirm()}
+          aria-label="Confirm move"
+          title="Confirm move"
+        >
+          <span className="icon action-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="presentation">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          </span>
         </button>
-        <button className="btn ghost" onClick={handleUndo}>
-          Clear Selection
+        <button
+          className={`btn icon-action-btn clear-btn${moveControlsInactive ? ' inactive-action' : ''}`}
+          disabled={!canClear}
+          onClick={handleUndo}
+          aria-label="Clear selection"
+          title="Clear selection"
+        >
+          <span className="icon action-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="presentation">
+              <circle cx="12" cy="12" r="8.5" />
+              <path d="M7.5 16.5 16.5 7.5" />
+            </svg>
+          </span>
         </button>
-        {canResign && (
-          <button className="btn secondary" disabled={onlineBusy} onClick={() => setResignPrompt(true)}>
-            Resign Match
-          </button>
-        )}
       </div>
+
+      {canResign && (
+        <div className="game-side-action">
+          <button className="btn secondary" disabled={onlineBusy} onClick={() => setResignPrompt(true)}>
+            {isWaitingOwnerMatch ? 'Delete Match' : 'Resign Match'}
+          </button>
+        </div>
+      )}
     </div>
   )
 
@@ -886,11 +973,15 @@ function App() {
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-backdrop" onClick={() => setResignPrompt(false)} />
           <div className="modal-card">
-            <h2>Resign this match?</h2>
-            <p>This will immediately end the online match for both players.</p>
+            <h2>{isWaitingOwnerMatch ? 'Delete this match?' : 'Resign this match?'}</h2>
+            <p>
+              {isWaitingOwnerMatch
+                ? 'This will remove the waiting match from the open list.'
+                : 'This will immediately end the online match. Resigning counts as a loss.'}
+            </p>
             <div className="modal-actions">
               <button className="btn secondary" disabled={onlineBusy} onClick={() => void handleResign()}>
-                Resign
+                {isWaitingOwnerMatch ? 'Delete' : 'Resign'}
               </button>
               <button className="btn ghost" onClick={() => setResignPrompt(false)}>
                 Cancel
