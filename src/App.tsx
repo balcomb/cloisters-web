@@ -50,6 +50,7 @@ type GameMode = 'bot' | 'offline' | 'online'
 type ProfileTarget =
   | { mode: 'self'; uid: string; name: string | null; photoURL: string | null }
   | { mode: 'opponent'; uid: string; name: string | null; photoURL: string | null }
+type HeadToHeadTarget = { uid: string; name: string | null; photoURL: string | null } | null
 
 function App() {
   const [screen, setScreen] = useState<'home' | 'game'>('home')
@@ -91,6 +92,8 @@ function App() {
   const [howToOpen, setHowToOpen] = useState(false)
   const [leaderboardOpen, setLeaderboardOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [headToHeadHistoryOpen, setHeadToHeadHistoryOpen] = useState(false)
+  const [headToHeadTarget, setHeadToHeadTarget] = useState<HeadToHeadTarget>(null)
   const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null)
   const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
   const [leaderboardProfiles, setLeaderboardProfiles] = useState<PublicProfile[]>([])
@@ -526,6 +529,26 @@ function App() {
     () => onlineMatches.filter((match) => match.status === 'finished'),
     [onlineMatches]
   )
+  const headToHeadHistory = useMemo(() => {
+    if (!headToHeadTarget || !user) return []
+    return onlineMatches.filter((match) => {
+      if (match.status !== 'finished') return false
+      return (
+        (match.bluePlayer.uid === user.uid && match.orangePlayer?.uid === headToHeadTarget.uid) ||
+        (match.orangePlayer?.uid === user.uid && match.bluePlayer.uid === headToHeadTarget.uid)
+      )
+    })
+  }, [headToHeadTarget, onlineMatches, user])
+  const availableHeadToHeadHistory = useMemo(() => {
+    if (!profileTarget || profileTarget.mode !== 'opponent' || !user) return []
+    return onlineMatches.filter((match) => {
+      if (match.status !== 'finished') return false
+      return (
+        (match.bluePlayer.uid === user.uid && match.orangePlayer?.uid === profileTarget.uid) ||
+        (match.orangePlayer?.uid === user.uid && match.bluePlayer.uid === profileTarget.uid)
+      )
+    })
+  }, [onlineMatches, profileTarget, user])
   const leaderboard = useMemo(
     () => buildLeaderboard(leaderboardProfiles, leaderboardMinimumMatches),
     [leaderboardProfiles]
@@ -1186,7 +1209,6 @@ function App() {
                 />
                 <div>
                   <h2>{profileTarget.name ?? 'Player Profile'}</h2>
-                  <p>{profile.summaryLabel}</p>
                 </div>
               </div>
               <button className="icon-close" aria-label="Close profile" onClick={() => setProfileTarget(null)}>
@@ -1212,7 +1234,6 @@ function App() {
                   <section className="profile-section">
                     <div className="profile-section-header">
                       <h3>Active Matches</h3>
-                      <p>Your currently active online games.</p>
                     </div>
                     {profile.activeMatchesList.length === 0 ? (
                       <p className="note">No active online matches right now.</p>
@@ -1240,32 +1261,89 @@ function App() {
                 </>
               ) : (
                 <section className="profile-section">
-                  <div className="profile-section-header">
-                    <h3>Head to Head</h3>
-                    <p>Your record against this player.</p>
-                  </div>
                   {profile.headToHead.length === 0 ? (
                     <p className="note">No completed matches against this player yet.</p>
                   ) : (
-                    <div className="profile-list">
-                      {profile.headToHead.map((entry) => (
-                        <div key={entry.uid} className="profile-row">
-                          <div>
-                            <strong>{entry.name}</strong>
-                            <p>
-                              {entry.wins}-{entry.losses}-{entry.draws} in {entry.total} match
-                              {entry.total === 1 ? '' : 'es'}
-                            </p>
-                          </div>
-                          <div className="profile-row-meta">
-                            <span>{entry.resignationSummary}</span>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="profile-stats">
+                      <div className="profile-stat">
+                        <span className="profile-stat-label">Your Head-to-Head Results</span>
+                        <strong>
+                          {profile.headToHead[0].wins}-{profile.headToHead[0].losses}-{profile.headToHead[0].draws}
+                        </strong>
+                      </div>
                     </div>
+                  )}
+                  {availableHeadToHeadHistory.length > 0 && (
+                    <button
+                      className="btn secondary"
+                      onClick={() => {
+                        setHeadToHeadTarget({
+                          uid: profileTarget.uid,
+                          name: profileTarget.name,
+                          photoURL: profileTarget.photoURL,
+                        })
+                        setProfileTarget(null)
+                        setHeadToHeadHistoryOpen(true)
+                      }}
+                    >
+                      Your Head-to-Head History
+                    </button>
                   )}
                 </section>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {headToHeadHistoryOpen && headToHeadTarget && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div
+            className="modal-backdrop"
+            onClick={() => {
+              setHeadToHeadHistoryOpen(false)
+              setHeadToHeadTarget(null)
+            }}
+          />
+          <div className="modal-card history-card">
+            <div className="how-to-header">
+              <h2>Your Head-to-Head History</h2>
+              <button
+                className="icon-close"
+                aria-label="Close head-to-head history"
+                onClick={() => {
+                  setHeadToHeadHistoryOpen(false)
+                  setHeadToHeadTarget(null)
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M5 5 19 19" />
+                  <path d="M19 5 5 19" />
+                </svg>
+              </button>
+            </div>
+            <div className="how-to-body">
+              <div className="profile-list">
+                {headToHeadHistory.map((match) => (
+                  <button
+                    key={match.id}
+                    className="profile-row match-history-row"
+                    onClick={() => {
+                      setHeadToHeadHistoryOpen(false)
+                      setProfileTarget(null)
+                      handleOpenOnlineMatch(match)
+                    }}
+                  >
+                    <div>
+                      <strong>vs {describeOpponent(match, user?.uid ?? '')}</strong>
+                      <p>{formatMatchHistoryResult(match, user?.uid ?? null)}</p>
+                    </div>
+                    <div className="profile-row-meta">
+                      <span>{formatMatchDate(match.updatedAt)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

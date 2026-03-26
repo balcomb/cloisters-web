@@ -136,6 +136,11 @@
   justify-content: center;
 }
 
+.profile-section > .btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .home-preview {
   display: flex;
   flex-direction: column;
@@ -384,7 +389,7 @@
 
 .profile-identity {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
 }
 
@@ -445,6 +450,10 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.profile-stats .profile-stat {
+  grid-column: 1 / -1;
 }
 
 .profile-stat {
