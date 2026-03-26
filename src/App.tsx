@@ -90,6 +90,7 @@ function App() {
   const [resignPrompt, setResignPrompt] = useState(false)
   const [howToOpen, setHowToOpen] = useState(false)
   const [leaderboardOpen, setLeaderboardOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null)
   const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
   const [leaderboardProfiles, setLeaderboardProfiles] = useState<PublicProfile[]>([])
@@ -521,6 +522,10 @@ function App() {
   }, [profileTarget, onlineMatches, publicProfile])
   const currentOpponent =
     currentOnlineMatch && user ? getOpponentProfile(currentOnlineMatch, user.uid) : null
+  const finishedMatches = useMemo(
+    () => onlineMatches.filter((match) => match.status === 'finished'),
+    [onlineMatches]
+  )
   const leaderboard = useMemo(
     () => buildLeaderboard(leaderboardProfiles, leaderboardMinimumMatches),
     [leaderboardProfiles]
@@ -930,6 +935,12 @@ function App() {
                 </div>
 
                 <div className="matches-group">
+                  <button className="btn secondary" onClick={() => setHistoryOpen(true)}>
+                    Your Match History
+                  </button>
+                </div>
+
+                <div className="matches-group">
                   {leaderboard.length > 0 && (
                     <button className="btn secondary" onClick={() => setLeaderboardOpen(true)}>
                       Leaderboard
@@ -1110,6 +1121,49 @@ function App() {
                         </div>
                       </div>
                       <div className="leaderboard-pct">{formatLeaderboardPct(entry.scorePct)}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historyOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => setHistoryOpen(false)} />
+          <div className="modal-card history-card">
+            <div className="how-to-header">
+              <h2>Your Match History</h2>
+              <button className="icon-close" aria-label="Close match history" onClick={() => setHistoryOpen(false)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M5 5 19 19" />
+                  <path d="M19 5 5 19" />
+                </svg>
+              </button>
+            </div>
+            <div className="how-to-body">
+              {finishedMatches.length === 0 ? (
+                <p>No completed online matches yet.</p>
+              ) : (
+                <div className="profile-list">
+                  {finishedMatches.map((match) => (
+                    <button
+                      key={match.id}
+                      className="profile-row match-history-row"
+                      onClick={() => {
+                        setHistoryOpen(false)
+                        handleOpenOnlineMatch(match)
+                      }}
+                    >
+                      <div>
+                        <strong>vs {describeOpponent(match, user?.uid ?? '')}</strong>
+                        <p>{formatMatchHistoryResult(match, user?.uid ?? null)}</p>
+                      </div>
+                      <div className="profile-row-meta">
+                        <span>{formatMatchDate(match.updatedAt)}</span>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -1446,6 +1500,26 @@ function formatMatchDate(value: unknown) {
     }).format(value.toDate())
   }
   return 'Recent'
+}
+
+function formatMatchHistoryResult(match: OnlineMatchState, userId: string | null) {
+  const player = getOnlinePlayer(match, userId)
+  const score = scoreAnchors(match.anchors)
+  const playerScore =
+    player === 'blue' ? score.blue : player === 'orange' ? score.orange : score.blue
+  const opponentScore =
+    player === 'blue' ? score.orange : player === 'orange' ? score.blue : score.orange
+
+  if (match.winner === 'draw' || !player) {
+    return `Tie ${playerScore}-${opponentScore}${formatResignationSuffix(match, player)}`
+  }
+
+  return `${match.winner === player ? 'Win' : 'Loss'} ${playerScore}-${opponentScore}${formatResignationSuffix(match, player)}`
+}
+
+function formatResignationSuffix(match: OnlineMatchState, player: Player | null) {
+  if (!match.resignedBy || !player) return ''
+  return match.resignedBy === player ? ' (you resigned)' : ' (they resigned)'
 }
 
 function buildLeaderboard(profiles: PublicProfile[], minimumMatches: number) {

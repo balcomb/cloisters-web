@@ -369,6 +369,11 @@
   overflow: hidden;
 }
 
+.modal-card.history-card {
+  width: min(500px, 92vw);
+  max-width: 500px;
+}
+
 .profile-header {
   display: flex;
   align-items: flex-start;
@@ -478,6 +483,13 @@
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba(20, 24, 33, 0.08);
+}
+
+.match-history-row {
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
 }
 
 .profile-row strong {
