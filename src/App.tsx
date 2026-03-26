@@ -539,16 +539,23 @@ function App() {
       ? `Bot Match · ${skillLevel === 'basic' ? 'Basic' : 'Advanced'}`
       : gameMode === 'offline'
         ? 'Offline Match'
-        : isOnlineDraft
-          ? 'Start Online Match'
-        : isOnlineJoinDraft
-          ? 'Join Online Match'
-        : currentOnlineMatch?.status === 'waiting'
-          ? 'Online Match · Waiting'
-          : 'Online Match'
+        : `Online Match${
+            currentOnlineMatch?.status === 'waiting' && !isOnlineDraft && !isOnlineJoinDraft
+              ? ' · Waiting'
+              : ''
+          }`
   const canResign =
     gameMode === 'online' &&
+    !isOnlineJoinDraft &&
     Boolean(currentOnlineMatchId && currentOnlineMatch && currentOnlineMatch.status !== 'finished')
+  const isFinishedOnlineMatch = gameMode === 'online' && currentOnlineMatch?.status === 'finished'
+  const finalScoreLabel = `Final score${
+    isFinishedOnlineMatch && currentOnlineMatch?.resignedBy
+      ? currentOnlineMatch.resignedBy === getOnlinePlayer(currentOnlineMatch, user?.uid ?? null)
+        ? ' (You resigned)'
+        : ' (They resigned)'
+      : ''
+  }`
   const isWaitingOwnerMatch =
     gameMode === 'online' &&
     Boolean(
@@ -558,6 +565,7 @@ function App() {
         currentOnlineMatch.bluePlayer.uid === user.uid &&
         !currentOnlineMatch.orangePlayer
     )
+  const showsDeleteAction = isOnlineDraft || isWaitingOwnerMatch
 
   const gameView = (
     <div className="game-shell">
@@ -567,8 +575,8 @@ function App() {
           {gameMode === 'online' && (
             <>
               <p className="match-meta">
-                {isOnlineDraft && <span>Make the first move to publish a waiting match</span>}
-                {isOnlineJoinDraft && <span>Make the second move to join this match</span>}
+                {isOnlineDraft && <span>Make the first move to start a match</span>}
+                {isOnlineJoinDraft && <span>Make the next move to join</span>}
               </p>
             </>
           )}
@@ -582,6 +590,9 @@ function App() {
       </header>
 
       <div className="score-bar">
+        <p className={`score-summary-label${isFinishedOnlineMatch ? ' visible' : ''}`}>
+          {finalScoreLabel}
+        </p>
         {gameMode === 'online' && currentOnlineMatch && (
           <div className="score-player score-player-blue">
             {currentOpponent?.uid === currentOnlineMatch.bluePlayer.uid ? (
@@ -615,11 +626,11 @@ function App() {
             )}
           </div>
         )}
-        <div className={`score blue${activePlayer === 'blue' ? ' active' : ''}`}>
+        <div className={`score blue${activePlayer === 'blue' && !isFinishedOnlineMatch ? ' active' : ''}`}>
           <span className="dot" />
           <strong>{scores.blue}</strong>
         </div>
-        <div className={`score orange${activePlayer === 'orange' ? ' active' : ''}`}>
+        <div className={`score orange${activePlayer === 'orange' && !isFinishedOnlineMatch ? ' active' : ''}`}>
           <span className="dot" />
           <strong>{scores.orange}</strong>
         </div>
@@ -741,10 +752,14 @@ function App() {
         </button>
       </div>
 
-      {canResign && (
+      {(gameMode === 'online' || canResign) && (
         <div className="game-side-action">
-          <button className="btn secondary" disabled={onlineBusy} onClick={() => setResignPrompt(true)}>
-            {isWaitingOwnerMatch ? 'Delete Match' : 'Resign Match'}
+          <button
+            className="btn secondary"
+            disabled={onlineBusy || !canResign}
+            onClick={() => setResignPrompt(true)}
+          >
+            {showsDeleteAction ? 'Delete Match' : 'Resign Match'}
           </button>
         </div>
       )}
@@ -986,15 +1001,15 @@ function App() {
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-backdrop" onClick={() => setResignPrompt(false)} />
           <div className="modal-card">
-            <h2>{isWaitingOwnerMatch ? 'Delete this match?' : 'Resign this match?'}</h2>
+            <h2>{showsDeleteAction ? 'Delete this match?' : 'Resign this match?'}</h2>
             <p>
-              {isWaitingOwnerMatch
+              {showsDeleteAction
                 ? 'This will remove the waiting match from the open list.'
                 : 'This will immediately end the online match. Resigning counts as a loss.'}
             </p>
             <div className="modal-actions">
               <button className="btn secondary" disabled={onlineBusy} onClick={() => void handleResign()}>
-                {isWaitingOwnerMatch ? 'Delete' : 'Resign'}
+                {showsDeleteAction ? 'Delete' : 'Resign'}
               </button>
               <button className="btn ghost" onClick={() => setResignPrompt(false)}>
                 Cancel

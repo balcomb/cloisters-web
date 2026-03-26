@@ -699,6 +699,23 @@
   justify-content: center;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
+}
+
+.score-summary-label {
+  width: 100%;
+  margin: 0 0 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  visibility: hidden;
+}
+
+.score-summary-label.visible {
+  visibility: visible;
 }
 
 .score-player {
