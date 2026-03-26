@@ -17,6 +17,7 @@ import { loadBotGame, saveBotGame, type BotGameState } from './services/botGameS
 import { loadOfflineGame, saveOfflineGame, type OfflineGameState } from './services/offlineGameStore'
 import {
   createOnlineMatch,
+  deleteOnlineMatch,
   joinOnlineMatch,
   joinOnlineMatchWithMove,
   resignOnlineMatch,
@@ -388,7 +389,14 @@ function App() {
     try {
       setOnlineBusy(true)
       setOnlineError(null)
-      await resignOnlineMatch(currentOnlineMatchId, user.uid)
+      if (isWaitingOwnerMatch) {
+        await deleteOnlineMatch(currentOnlineMatchId, user.uid)
+        setCurrentOnlineMatchId(null)
+        setCurrentOnlineMatch(null)
+        setScreen('home')
+      } else {
+        await resignOnlineMatch(currentOnlineMatchId, user.uid)
+      }
       setResignPrompt(false)
     } catch (error) {
       setOnlineError(error instanceof Error ? error.message : 'Failed to resign match.')
@@ -504,7 +512,6 @@ function App() {
     }
   }, [screen])
 
-  const onlinePlayer = currentOnlineMatch ? getOnlinePlayer(currentOnlineMatch, user?.uid ?? null) : null
   const profile = useMemo(() => {
     if (!profileTarget) return null
     if (profileTarget.mode === 'self') {

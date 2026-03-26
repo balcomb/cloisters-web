@@ -1,7 +1,6 @@
 import {
-  Timestamp,
-  Transaction,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   query,
@@ -53,26 +52,6 @@ type FirebaseUserProfile = {
   uid: string
   displayName: string | null
   photoURL: string | null
-}
-
-type StoredPublicProfile = {
-  uid: string
-  displayName: string | null
-  photoURL: string | null
-  wins: number
-  losses: number
-  draws: number
-  resignations: number
-  winsByResignation: number
-  completedMatches: number
-  recentResults: Array<{
-    matchId: string
-    opponentUid: string
-    opponentName: string
-    outcome: 'win' | 'loss' | 'draw'
-    method: 'completed' | 'resigned'
-    playedAt: Timestamp
-  }>
 }
 
 const matchesCollection = collection(db, 'matches')
@@ -171,14 +150,6 @@ export async function joinOnlineMatchWithMove(
       winner,
       updatedAt: serverTimestamp(),
     })
-    if (boardFull) {
-      await updateProfilesForFinishedMatch(transaction, matchRef.id, {
-        bluePlayer: match.bluePlayer,
-        orangePlayer: toProfile(user),
-        winner,
-        resignedBy: null,
-      })
-    }
   })
 }
 
@@ -235,15 +206,27 @@ export async function submitOnlineMove(
       winner,
       updatedAt: serverTimestamp(),
     })
-    if (boardFull && match.orangePlayer) {
-      await updateProfilesForFinishedMatch(transaction, matchRef.id, {
-        bluePlayer: match.bluePlayer,
-        orangePlayer: match.orangePlayer,
-        winner,
-        resignedBy: null,
-      })
+  })
+}
+
+export async function deleteOnlineMatch(matchId: string, userId: string): Promise<void> {
+  const matchRef = doc(db, 'matches', matchId)
+  await runTransaction(db, async (transaction) => {
+    const matchSnap = await transaction.get(matchRef)
+    if (!matchSnap.exists()) {
+      throw new Error('Match not found.')
+    }
+
+    const match = withId(matchSnap.id, matchSnap.data())
+    if (match.status !== 'waiting' || match.orangePlayer) {
+      throw new Error('Only open waiting matches can be deleted.')
+    }
+    if (match.bluePlayer.uid !== userId) {
+      throw new Error('Only the match creator can delete this match.')
     }
   })
+
+  await deleteDoc(matchRef)
 }
 
 export async function resignOnlineMatch(matchId: string, userId: string): Promise<void> {
@@ -273,14 +256,6 @@ export async function resignOnlineMatch(matchId: string, userId: string): Promis
       resignedBy: player,
       updatedAt: serverTimestamp(),
     })
-    if (match.orangePlayer) {
-      await updateProfilesForFinishedMatch(transaction, matchRef.id, {
-        bluePlayer: match.bluePlayer,
-        orangePlayer: match.orangePlayer,
-        winner,
-        resignedBy: player,
-      })
-    }
   })
 }
 
@@ -359,144 +334,6 @@ function toProfile(user: FirebaseUserProfile): MatchPlayerProfile {
     displayName: user.displayName ?? null,
     photoURL: user.photoURL ?? null,
   }
-}
-
-async function updateProfilesForFinishedMatch(
-  transaction: Transaction,
-  matchId: string,
-  result: {
-    bluePlayer: MatchPlayerProfile
-    orangePlayer: MatchPlayerProfile
-    winner: Player | 'draw' | null
-    resignedBy: Player | null
-  }
-) {
-  const playedAt = Timestamp.now()
-  const blueRef = doc(db, 'publicProfiles', result.bluePlayer.uid)
-  const orangeRef = doc(db, 'publicProfiles', result.orangePlayer.uid)
-
-  const blueProfile = await mergeFinishedMatchIntoProfile(
-    transaction,
-    blueRef,
-    result.bluePlayer,
-    {
-      matchId,
-      opponent: result.orangePlayer,
-      outcome: getOutcomeForPlayer('blue', result.winner),
-      method: result.resignedBy ? 'resigned' : 'completed',
-      didResign: result.resignedBy === 'blue',
-      opponentResigned: result.resignedBy === 'orange',
-      playedAt,
-    }
-  )
-  const orangeProfile = await mergeFinishedMatchIntoProfile(
-    transaction,
-    orangeRef,
-    result.orangePlayer,
-    {
-      matchId,
-      opponent: result.bluePlayer,
-      outcome: getOutcomeForPlayer('orange', result.winner),
-      method: result.resignedBy ? 'resigned' : 'completed',
-      didResign: result.resignedBy === 'orange',
-      opponentResigned: result.resignedBy === 'blue',
-      playedAt,
-    }
-  )
-
-  transaction.set(blueRef, blueProfile, { merge: true })
-  transaction.set(orangeRef, orangeProfile, { merge: true })
-}
-
-async function mergeFinishedMatchIntoProfile(
-  transaction: Transaction,
-  ref: ReturnType<typeof doc>,
-  player: MatchPlayerProfile,
-  result: {
-    matchId: string
-    opponent: MatchPlayerProfile
-    outcome: 'win' | 'loss' | 'draw'
-    method: 'completed' | 'resigned'
-    didResign: boolean
-    opponentResigned: boolean
-    playedAt: Timestamp
-  }
-): Promise<StoredPublicProfile> {
-  const snap = await transaction.get(ref)
-  const current = snap.exists() ? getStoredPublicProfile(snap.data()) : getEmptyPublicProfile(player)
-  const recentResult = {
-    matchId: result.matchId,
-    opponentUid: result.opponent.uid,
-    opponentName: result.opponent.displayName ?? 'Opponent',
-    outcome: result.outcome,
-    method: result.method,
-    playedAt: result.playedAt,
-  }
-  return {
-    uid: player.uid,
-    displayName: player.displayName ?? current.displayName ?? null,
-    photoURL: player.photoURL ?? current.photoURL ?? null,
-    wins: current.wins + (result.outcome === 'win' ? 1 : 0),
-    losses: current.losses + (result.outcome === 'loss' ? 1 : 0),
-    draws: current.draws + (result.outcome === 'draw' ? 1 : 0),
-    resignations: current.resignations + (result.didResign ? 1 : 0),
-    winsByResignation: current.winsByResignation + (result.opponentResigned ? 1 : 0),
-    completedMatches: current.completedMatches + 1,
-    recentResults: [recentResult, ...current.recentResults].slice(0, 10),
-  }
-}
-
-function getOutcomeForPlayer(
-  player: Player,
-  winner: Player | 'draw' | null
-): 'win' | 'loss' | 'draw' {
-  if (winner === 'draw' || winner === null) return 'draw'
-  return winner === player ? 'win' : 'loss'
-}
-
-function getStoredPublicProfile(data: Record<string, unknown>): StoredPublicProfile {
-  return {
-    uid: typeof data.uid === 'string' ? data.uid : '',
-    displayName: typeof data.displayName === 'string' ? data.displayName : null,
-    photoURL: typeof data.photoURL === 'string' ? data.photoURL : null,
-    wins: typeof data.wins === 'number' ? data.wins : 0,
-    losses: typeof data.losses === 'number' ? data.losses : 0,
-    draws: typeof data.draws === 'number' ? data.draws : 0,
-    resignations: typeof data.resignations === 'number' ? data.resignations : 0,
-    winsByResignation: typeof data.winsByResignation === 'number' ? data.winsByResignation : 0,
-    completedMatches: typeof data.completedMatches === 'number' ? data.completedMatches : 0,
-    recentResults: Array.isArray(data.recentResults)
-      ? (data.recentResults.filter(isStoredRecentResult) as StoredPublicProfile['recentResults'])
-      : [],
-  }
-}
-
-function getEmptyPublicProfile(player: MatchPlayerProfile): StoredPublicProfile {
-  return {
-    uid: player.uid,
-    displayName: player.displayName ?? null,
-    photoURL: player.photoURL ?? null,
-    wins: 0,
-    losses: 0,
-    draws: 0,
-    resignations: 0,
-    winsByResignation: 0,
-    completedMatches: 0,
-    recentResults: [],
-  }
-}
-
-function isStoredRecentResult(value: unknown): value is StoredPublicProfile['recentResults'][number] {
-  return Boolean(
-    value &&
-      typeof value === 'object' &&
-      'matchId' in value &&
-      'opponentUid' in value &&
-      'opponentName' in value &&
-      'outcome' in value &&
-      'method' in value &&
-      'playedAt' in value
-  )
 }
 
 function isMatchStatus(value: unknown): value is OnlineMatchStatus {

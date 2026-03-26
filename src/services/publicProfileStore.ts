@@ -49,7 +49,6 @@ export async function syncPublicProfileIdentity(user: FirebaseUserProfile): Prom
       displayName: user.displayName ?? null,
       photoURL: user.photoURL ?? null,
       updatedAt: serverTimestamp(),
-      joinedAt: serverTimestamp(),
     },
     { merge: true }
   )

@@ -1,33 +1,135 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function currentPlayerColor() {
+      return resource.data.bluePlayer.uid == request.auth.uid
+        ? 'blue'
+        : resource.data.orangePlayer.uid == request.auth.uid
+          ? 'orange'
+          : null;
+    }
+
+    function identityKeys() {
+      return ['uid', 'displayName', 'photoURL', 'updatedAt', 'joinedAt'];
+    }
+
     match /users/{userId}/botGames/{skillLevel} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner(userId);
     }
+
     match /users/{userId}/offlineGame/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner(userId);
     }
+
     match /publicProfiles/{userId} {
       allow read: if true;
-      allow create, update: if request.auth != null;
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(identityKeys());
+      allow update: if isOwner(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']);
+      allow delete: if false;
+
+      match /processedMatches/{matchId} {
+        allow read, write: if false;
+      }
     }
+
     match /matches/{matchId} {
-      allow create: if request.auth != null
-        && request.resource.data.bluePlayer.uid == request.auth.uid;
-      allow read: if request.auth != null
+      allow create: if signedIn()
+        && request.resource.data.bluePlayer.uid == request.auth.uid
+        && request.resource.data.orangePlayer == null
+        && request.resource.data.participantIds.size() == 1
+        && request.resource.data.participantIds[0] == request.auth.uid
+        && request.resource.data.status == 'waiting';
+
+      allow read: if signedIn()
         && (
           resource.data.status == 'waiting'
           || request.auth.uid in resource.data.participantIds
         );
-      allow update: if request.auth != null
-        && (
-          request.auth.uid in resource.data.participantIds
-          || (
-            resource.data.status == 'waiting'
-            && resource.data.orangePlayer == null
-            && request.resource.data.orangePlayer.uid == request.auth.uid
-          )
-        );
+
+      allow update: if signedIn() && (
+        isWaitingJoin()
+        || isActiveMove()
+        || isActiveResign()
+      );
+
+      allow delete: if signedIn()
+        && resource.data.status == 'waiting'
+        && resource.data.orangePlayer == null
+        && resource.data.bluePlayer.uid == request.auth.uid;
+
+      function isWaitingJoin() {
+        return resource.data.status == 'waiting'
+          && resource.data.orangePlayer == null
+          && request.auth.uid != resource.data.bluePlayer.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'orangePlayer',
+            'participantIds',
+            'anchors',
+            'nextId',
+            'activePlayer',
+            'lastMove',
+            'status',
+            'winner',
+            'updatedAt'
+          ])
+          && request.resource.data.orangePlayer.uid == request.auth.uid
+          && request.resource.data.participantIds.size() == 2
+          && request.resource.data.bluePlayer == resource.data.bluePlayer
+          && request.resource.data.status in ['active', 'finished']
+          && request.resource.data.resignedBy == resource.data.resignedBy;
+      }
+
+      function isActiveMove() {
+        return resource.data.status == 'active'
+          && request.auth.uid in resource.data.participantIds
+          && currentPlayerColor() == resource.data.activePlayer
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'anchors',
+            'nextId',
+            'activePlayer',
+            'lastMove',
+            'status',
+            'winner',
+            'updatedAt'
+          ])
+          && request.resource.data.bluePlayer == resource.data.bluePlayer
+          && request.resource.data.orangePlayer == resource.data.orangePlayer
+          && request.resource.data.participantIds == resource.data.participantIds
+          && request.resource.data.resignedBy == resource.data.resignedBy
+          && request.resource.data.status in ['active', 'finished'];
+      }
+
+      function isActiveResign() {
+        return resource.data.status == 'active'
+          && request.auth.uid in resource.data.participantIds
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'winner',
+            'resignedBy',
+            'updatedAt'
+          ])
+          && request.resource.data.bluePlayer == resource.data.bluePlayer
+          && request.resource.data.orangePlayer == resource.data.orangePlayer
+          && request.resource.data.participantIds == resource.data.participantIds
+          && request.resource.data.anchors == resource.data.anchors
+          && request.resource.data.nextId == resource.data.nextId
+          && request.resource.data.activePlayer == resource.data.activePlayer
+          && request.resource.data.lastMove == resource.data.lastMove
+          && request.resource.data.status == 'finished'
+          && request.resource.data.resignedBy == currentPlayerColor();
+      }
     }
   }
 }
