@@ -1018,10 +1018,22 @@
   flex-wrap: wrap;
 }
 
+.game-footer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
 .game-side-action {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  flex: 1;
+}
+
+.game-side-action.left {
+  justify-content: flex-start;
 }
 
 .btn {
@@ -1097,6 +1109,7 @@
   height: 21px;
   opacity: 0.7;
 }
+
 
 .icon-action-btn {
   min-width: 120px;

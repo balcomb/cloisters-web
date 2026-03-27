@@ -51,6 +51,7 @@ type ProfileTarget =
   | { mode: 'self'; uid: string; name: string | null; photoURL: string | null }
   | { mode: 'opponent'; uid: string; name: string | null; photoURL: string | null }
 type HeadToHeadTarget = { uid: string; name: string | null; photoURL: string | null } | null
+type AppRoute = { matchId: string | null }
 
 function App() {
   const [screen, setScreen] = useState<'home' | 'game'>('home')
@@ -88,6 +89,7 @@ function App() {
   const [currentOnlineMatch, setCurrentOnlineMatch] = useState<OnlineMatchState | null>(null)
   const [onlineError, setOnlineError] = useState<string | null>(null)
   const [onlineBusy, setOnlineBusy] = useState(false)
+  const [copiedMatchLink, setCopiedMatchLink] = useState(false)
   const [resignPrompt, setResignPrompt] = useState(false)
   const [howToOpen, setHowToOpen] = useState(false)
   const [leaderboardOpen, setLeaderboardOpen] = useState(false)
@@ -109,6 +111,29 @@ function App() {
     if (!anchor) return new Set<string>()
     return new Set(getCoveredPositions(anchor).map((pos) => `${pos.x},${pos.y}`))
   }, [anchors, lastMove])
+
+  useEffect(() => {
+    const syncRoute = () => {
+      const route = getAppRoute(window.location.pathname)
+      if (!route.matchId) {
+        setCurrentOnlineMatchId(null)
+        setCurrentOnlineMatch(null)
+        if (gameMode === 'online') {
+          setScreen('home')
+        }
+        return
+      }
+      setGameMode('online')
+      setCurrentOnlineMatchId(route.matchId)
+      setScreen('game')
+    }
+
+    syncRoute()
+    window.addEventListener('popstate', syncRoute)
+    return () => {
+      window.removeEventListener('popstate', syncRoute)
+    }
+  }, [gameMode])
 
   useEffect(() => {
     return subscribeToAuth((state) => {
@@ -234,6 +259,7 @@ function App() {
       setCurrentOnlineMatch(match)
       if (!match) {
         setOnlineError('This match is no longer available.')
+        navigateHome(true)
         setScreen('home')
         return
       }
@@ -285,6 +311,7 @@ function App() {
           const matchId = await createOnlineMatch(user, selected)
           setCurrentOnlineMatchId(matchId)
           setCurrentOnlineMatch(null)
+          navigateToMatch(matchId)
         } else if (
           currentOnlineMatch?.status === 'waiting' &&
           currentOnlineMatch.bluePlayer.uid !== user.uid &&
@@ -357,6 +384,9 @@ function App() {
     setCurrentOnlineMatchId(existingWaitingMatch?.id ?? null)
     if (!existingWaitingMatch) {
       handleRestart()
+      navigateHome(true)
+    } else {
+      navigateToMatch(existingWaitingMatch.id)
     }
     setScreen('game')
   }
@@ -371,6 +401,7 @@ function App() {
       setCurrentOnlineMatchId(match.id)
       setCurrentOnlineMatch(match)
       setSelected(null)
+      navigateToMatch(match.id)
       setScreen('game')
     } catch (error) {
       setOnlineError(error instanceof Error ? error.message : 'Failed to join match.')
@@ -385,6 +416,7 @@ function App() {
     setGameMode('online')
     setCurrentOnlineMatchId(match.id)
     setCurrentOnlineMatch(match)
+    navigateToMatch(match.id)
     setScreen('game')
   }
 
@@ -397,6 +429,7 @@ function App() {
         await deleteOnlineMatch(currentOnlineMatchId, user.uid)
         setCurrentOnlineMatchId(null)
         setCurrentOnlineMatch(null)
+        navigateHome()
         setScreen('home')
       } else {
         await resignOnlineMatch(currentOnlineMatchId, user.uid)
@@ -406,6 +439,16 @@ function App() {
       setOnlineError(error instanceof Error ? error.message : 'Failed to resign match.')
     } finally {
       setOnlineBusy(false)
+    }
+  }
+
+  const handleCopyMatchLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopiedMatchLink(true)
+      window.setTimeout(() => setCopiedMatchLink(false), 1500)
+    } catch (error) {
+      console.error('Failed to copy match link', error)
     }
   }
 
@@ -472,6 +515,9 @@ function App() {
     }
     setSelected(null)
     setResignPrompt(false)
+    if (gameMode === 'online') {
+      navigateHome()
+    }
     setScreen('home')
   }
 
@@ -781,7 +827,14 @@ function App() {
       </div>
 
       {(gameMode === 'online' || canResign) && (
-        <div className="game-side-action">
+        <div className="game-footer-actions">
+          <div className="game-side-action left">
+            {gameMode === 'online' && !isOnlineDraft && (
+              <button className="btn secondary copy-link-action" onClick={() => void handleCopyMatchLink()}>
+                {copiedMatchLink ? 'Copied' : 'Copy Link'}
+              </button>
+            )}
+          </div>
           <button
             className="btn secondary"
             disabled={onlineBusy || !canResign}
@@ -1578,6 +1631,22 @@ function formatMatchDate(value: unknown) {
     }).format(value.toDate())
   }
   return 'Recent'
+}
+
+function getAppRoute(pathname: string): AppRoute {
+  const match = pathname.match(/^\/match\/([^/]+)$/)
+  return { matchId: match ? decodeURIComponent(match[1]) : null }
+}
+
+function navigateToMatch(matchId: string, replace = false) {
+  const nextUrl = `/match/${encodeURIComponent(matchId)}`
+  if (window.location.pathname === nextUrl) return
+  window.history[replace ? 'replaceState' : 'pushState']({}, '', nextUrl)
+}
+
+function navigateHome(replace = false) {
+  if (window.location.pathname === '/') return
+  window.history[replace ? 'replaceState' : 'pushState']({}, '', '/')
 }
 
 function formatMatchHistoryResult(match: OnlineMatchState, userId: string | null) {

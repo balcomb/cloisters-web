@@ -14,7 +14,7 @@ service cloud.firestore {
         ? 'blue'
         : resource.data.orangePlayer.uid == request.auth.uid
           ? 'orange'
-          : null;
+          : '';
     }
 
     function identityKeys() {
