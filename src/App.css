@@ -712,7 +712,9 @@
 .board-panel {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
 .score-bar {
@@ -851,8 +853,8 @@
   grid-template-columns: repeat(var(--size), minmax(0, 1fr));
   aspect-ratio: 1 / 1;
   gap: 3px;
-  padding: 18px;
-  border-radius: 24px;
+  padding: 8px;
+  border-radius: 4px;
   background-color: #d7dbe3;
   background-image: none;
   position: relative;
@@ -1014,8 +1016,59 @@
 .action-row {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.action-row-main {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.action-row-controls {
+  position: relative;
+  display: none;
+  margin-left: auto;
+}
+
+.controls-menu-toggle {
+  min-width: 56px;
+  min-height: 56px;
+  padding: 0;
+  justify-content: center;
+}
+
+.controls-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.controls-icon svg {
+  stroke-width: 1.8;
+}
+
+.controls-menu-sheet {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 188px;
+  padding: 10px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-soft);
+  z-index: 2;
+}
+
+.controls-menu-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .game-footer-actions {
@@ -1041,6 +1094,7 @@
   padding: 12px 20px;
   border-radius: 999px;
   font-weight: 600;
+  font-size: 16px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: inline-flex;
@@ -1324,10 +1378,81 @@
   }
 
   .game-overlay-panel {
-    --panel-pad-top: 92px;
-    --panel-pad-bottom: 36px;
-    padding: 24px 20px 36px;
-    padding-top: 92px;
+    padding: 56px 20px 36px;
+  }
+
+  .score {
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 14px;
+  }
+
+  .score strong {
+    font-size: 20px;
+  }
+
+  .dot {
+    width: 22px;
+    height: 22px;
+  }
+
+  .score-avatar,
+  .score-avatar-placeholder {
+    width: 34px;
+    height: 34px;
+  }
+
+  .score-you-pill {
+    right: -6px;
+    bottom: -4px;
+    font-size: 10px;
+    padding: 3px 4px;
+  }
+
+  .icon-action-btn {
+    min-width: 96px;
+    min-height: 48px;
+  }
+
+  .action-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .action-row {
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: nowrap;
+  }
+
+  .action-row-main {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+
+  .action-row-controls {
+    display: flex;
+    flex: 0 0 auto;
+  }
+
+  .controls-menu-toggle {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .controls-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .icon-close svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .game-footer-actions {
+    display: none;
   }
 }
 .game-overlay {
@@ -1349,10 +1474,7 @@
   overflow: hidden;
   background: var(--panel);
   box-shadow: var(--shadow-strong);
-  --panel-pad-top: 104px;
-  --panel-pad-bottom: 48px;
-  padding: 32px clamp(20px, 4vw, 56px) 48px;
-  padding-top: 104px;
+  padding: 72px clamp(20px, 4vw, 56px) 48px;
 }
 
 .modal-overlay {
@@ -1431,9 +1553,21 @@
 
 @media (max-width: 640px) {
   .profile-header,
-  .profile-row,
-  .how-to-header {
+  .profile-row {
     flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .modal-overlay {
+    padding: 16px;
+  }
+
+  .how-to-card {
+    width: min(760px, calc(100vw - 32px));
+  }
+
+  .how-to-header {
+    flex-direction: row;
     align-items: flex-start;
   }
 
@@ -1456,11 +1590,12 @@
 
 .game-shell {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 24px;
+  width: 100%;
   max-width: 1100px;
   margin: 0 auto;
-  height: calc(100vh - var(--panel-pad-top) - var(--panel-pad-bottom));
+  height: 100%;
   min-height: 0;
 }
 
@@ -1471,8 +1606,24 @@
 }
 
 .board-wrap {
+  width: 100%;
+  max-width: 600px;
   min-height: 0;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
+  margin-inline: auto;
 }
+
+@media (max-width: 960px) {
+  .game-shell {
+    gap: 0;
+  }
+
+  .board-wrap {
+    aspect-ratio: 1 / 1;
+    align-self: center;
+    justify-self: center;
+  }
+}
+

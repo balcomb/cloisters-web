@@ -90,6 +90,7 @@ function App() {
   const [onlineError, setOnlineError] = useState<string | null>(null)
   const [onlineBusy, setOnlineBusy] = useState(false)
   const [copiedMatchLink, setCopiedMatchLink] = useState(false)
+  const [controlsMenuOpen, setControlsMenuOpen] = useState(false)
   const [resignPrompt, setResignPrompt] = useState(false)
   const [howToOpen, setHowToOpen] = useState(false)
   const [leaderboardOpen, setLeaderboardOpen] = useState(false)
@@ -100,6 +101,7 @@ function App() {
   const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
   const [leaderboardProfiles, setLeaderboardProfiles] = useState<PublicProfile[]>([])
   const boardWrapRef = useRef<HTMLDivElement | null>(null)
+  const controlsMenuRef = useRef<HTMLDivElement | null>(null)
 
   const occupancy = useMemo(() => buildOccupancy(anchors), [anchors])
   const openCount = gridSize * gridSize - occupancy.size
@@ -150,6 +152,7 @@ function App() {
         setWaitingMatches([])
         setCurrentOnlineMatch(null)
         setCurrentOnlineMatchId(null)
+        setControlsMenuOpen(false)
         setResignPrompt(false)
         setHowToOpen(false)
         setProfileTarget(null)
@@ -164,6 +167,28 @@ function App() {
       unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!controlsMenuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (controlsMenuRef.current?.contains(event.target as Node)) return
+      setControlsMenuOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setControlsMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [controlsMenuOpen])
 
   useEffect(() => {
     if (!user) return
@@ -401,6 +426,7 @@ function App() {
       setCurrentOnlineMatchId(match.id)
       setCurrentOnlineMatch(match)
       setSelected(null)
+      setControlsMenuOpen(false)
       navigateToMatch(match.id)
       setScreen('game')
     } catch (error) {
@@ -412,6 +438,7 @@ function App() {
 
   const handleOpenOnlineMatch = (match: OnlineMatchState) => {
     setOnlineError(null)
+    setControlsMenuOpen(false)
     setResignPrompt(false)
     setGameMode('online')
     setCurrentOnlineMatchId(match.id)
@@ -425,6 +452,7 @@ function App() {
     try {
       setOnlineBusy(true)
       setOnlineError(null)
+      setControlsMenuOpen(false)
       if (isWaitingOwnerMatch) {
         await deleteOnlineMatch(currentOnlineMatchId, user.uid)
         setCurrentOnlineMatchId(null)
@@ -445,6 +473,7 @@ function App() {
   const handleCopyMatchLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href)
+      setControlsMenuOpen(false)
       setCopiedMatchLink(true)
       window.setTimeout(() => setCopiedMatchLink(false), 1500)
     } catch (error) {
@@ -514,6 +543,7 @@ function App() {
       setSignInPromptShown(true)
     }
     setSelected(null)
+    setControlsMenuOpen(false)
     setResignPrompt(false)
     if (gameMode === 'online') {
       navigateHome()
@@ -544,7 +574,8 @@ function App() {
 
     const updateBoardSize = () => {
       const { width, height } = element.getBoundingClientRect()
-      const nextSize = Math.max(0, Math.floor(Math.min(width, height)))
+      const isCompactViewport = window.innerWidth <= 640
+      const nextSize = Math.max(0, Math.floor(isCompactViewport ? width : Math.min(width, height)))
       setBoardSize(nextSize)
     }
 
@@ -663,100 +694,101 @@ function App() {
         </button>
       </header>
 
-      <div className="score-bar">
-        <p className={`score-summary-label${isFinishedOnlineMatch ? ' visible' : ''}`}>
-          {finalScoreLabel}
-        </p>
-        {gameMode === 'online' && currentOnlineMatch && (
-          <div className="score-player score-player-blue">
-            {currentOpponent?.uid === currentOnlineMatch.bluePlayer.uid ? (
-              <button
-                className="avatar-button score-avatar-button"
-                aria-label={`Open ${currentOnlineMatch.bluePlayer.displayName ?? 'opponent'} profile`}
-                onClick={() =>
-                  setProfileTarget({
-                    mode: 'opponent',
-                    uid: currentOnlineMatch.bluePlayer.uid,
-                    name: currentOnlineMatch.bluePlayer.displayName,
-                    photoURL: currentOnlineMatch.bluePlayer.photoURL,
-                  })
-                }
-              >
-                <AvatarImage
-                  className="avatar score-avatar"
-                  name={currentOnlineMatch.bluePlayer.displayName}
-                  photoURL={currentOnlineMatch.bluePlayer.photoURL}
-                />
-              </button>
-            ) : (
-              <div className="score-avatar-wrap">
-                <AvatarImage
-                  className="avatar score-avatar"
-                  name={currentOnlineMatch.bluePlayer.displayName}
-                  photoURL={currentOnlineMatch.bluePlayer.photoURL}
-                />
-                <span className="score-you-pill">You</span>
-              </div>
-            )}
+      <div className="board-panel">
+        <div className="score-bar">
+          <p className={`score-summary-label${isFinishedOnlineMatch ? ' visible' : ''}`}>
+            {finalScoreLabel}
+          </p>
+          {gameMode === 'online' && currentOnlineMatch && (
+            <div className="score-player score-player-blue">
+              {currentOpponent?.uid === currentOnlineMatch.bluePlayer.uid ? (
+                <button
+                  className="avatar-button score-avatar-button"
+                  aria-label={`Open ${currentOnlineMatch.bluePlayer.displayName ?? 'opponent'} profile`}
+                  onClick={() =>
+                    setProfileTarget({
+                      mode: 'opponent',
+                      uid: currentOnlineMatch.bluePlayer.uid,
+                      name: currentOnlineMatch.bluePlayer.displayName,
+                      photoURL: currentOnlineMatch.bluePlayer.photoURL,
+                    })
+                  }
+                >
+                  <AvatarImage
+                    className="avatar score-avatar"
+                    name={currentOnlineMatch.bluePlayer.displayName}
+                    photoURL={currentOnlineMatch.bluePlayer.photoURL}
+                  />
+                </button>
+              ) : (
+                <div className="score-avatar-wrap">
+                  <AvatarImage
+                    className="avatar score-avatar"
+                    name={currentOnlineMatch.bluePlayer.displayName}
+                    photoURL={currentOnlineMatch.bluePlayer.photoURL}
+                  />
+                  <span className="score-you-pill">You</span>
+                </div>
+              )}
+            </div>
+          )}
+          <div className={`score blue${activePlayer === 'blue' && !isFinishedOnlineMatch ? ' active' : ''}`}>
+            <span className="dot" />
+            <strong>{scores.blue}</strong>
           </div>
-        )}
-        <div className={`score blue${activePlayer === 'blue' && !isFinishedOnlineMatch ? ' active' : ''}`}>
-          <span className="dot" />
-          <strong>{scores.blue}</strong>
-        </div>
-        <div className={`score orange${activePlayer === 'orange' && !isFinishedOnlineMatch ? ' active' : ''}`}>
-          <span className="dot" />
-          <strong>{scores.orange}</strong>
-        </div>
-        {gameMode === 'online' && currentOnlineMatch?.orangePlayer && (
-          <div className="score-player score-player-orange">
-            {currentOpponent?.uid === currentOnlineMatch.orangePlayer.uid ? (
-              <button
-                className="avatar-button score-avatar-button"
-                aria-label={`Open ${currentOnlineMatch.orangePlayer.displayName ?? 'opponent'} profile`}
-                onClick={() =>
-                  setProfileTarget({
-                    mode: 'opponent',
-                    uid: currentOnlineMatch.orangePlayer!.uid,
-                    name: currentOnlineMatch.orangePlayer!.displayName,
-                    photoURL: currentOnlineMatch.orangePlayer!.photoURL,
-                  })
-                }
-              >
-                <AvatarImage
-                  className="avatar score-avatar"
-                  name={currentOnlineMatch.orangePlayer.displayName}
-                  photoURL={currentOnlineMatch.orangePlayer.photoURL}
-                />
-              </button>
-            ) : (
-              <div className="score-avatar-wrap">
-                <AvatarImage
-                  className="avatar score-avatar"
-                  name={currentOnlineMatch.orangePlayer.displayName}
-                  photoURL={currentOnlineMatch.orangePlayer.photoURL}
-                />
-                <span className="score-you-pill">You</span>
-              </div>
-            )}
+          <div className={`score orange${activePlayer === 'orange' && !isFinishedOnlineMatch ? ' active' : ''}`}>
+            <span className="dot" />
+            <strong>{scores.orange}</strong>
           </div>
-        )}
-        {gameMode === 'online' && currentOnlineMatch && !currentOnlineMatch.orangePlayer && (
-          <span className="score-avatar-placeholder" aria-hidden="true" />
-        )}
-      </div>
+          {gameMode === 'online' && currentOnlineMatch?.orangePlayer && (
+            <div className="score-player score-player-orange">
+              {currentOpponent?.uid === currentOnlineMatch.orangePlayer.uid ? (
+                <button
+                  className="avatar-button score-avatar-button"
+                  aria-label={`Open ${currentOnlineMatch.orangePlayer.displayName ?? 'opponent'} profile`}
+                  onClick={() =>
+                    setProfileTarget({
+                      mode: 'opponent',
+                      uid: currentOnlineMatch.orangePlayer!.uid,
+                      name: currentOnlineMatch.orangePlayer!.displayName,
+                      photoURL: currentOnlineMatch.orangePlayer!.photoURL,
+                    })
+                  }
+                >
+                  <AvatarImage
+                    className="avatar score-avatar"
+                    name={currentOnlineMatch.orangePlayer.displayName}
+                    photoURL={currentOnlineMatch.orangePlayer.photoURL}
+                  />
+                </button>
+              ) : (
+                <div className="score-avatar-wrap">
+                  <AvatarImage
+                    className="avatar score-avatar"
+                    name={currentOnlineMatch.orangePlayer.displayName}
+                    photoURL={currentOnlineMatch.orangePlayer.photoURL}
+                  />
+                  <span className="score-you-pill">You</span>
+                </div>
+              )}
+            </div>
+          )}
+          {gameMode === 'online' && currentOnlineMatch && !currentOnlineMatch.orangePlayer && (
+            <span className="score-avatar-placeholder" aria-hidden="true" />
+          )}
+        </div>
 
-      <div className="board-wrap" ref={boardWrapRef}>
-        <div
-          className="board"
-          style={
-            {
-              ['--size' as string]: gridSize,
-              width: boardSize ? `${boardSize}px` : undefined,
-              height: boardSize ? `${boardSize}px` : undefined,
-            } as CSSProperties
-          }
-        >
+        <div className="board-wrap" ref={boardWrapRef}>
+          <div
+            className="board"
+            style={
+              {
+                ['--size' as string]: gridSize,
+                width: boardSize ? `${boardSize}px` : undefined,
+                height: boardSize ? `${boardSize}px` : undefined,
+              } as CSSProperties
+            }
+          >
           {cells.map((cell) => {
             const piece = anchors.find((p) => p.x === cell.x && p.y === cell.y)
             const isSelected = selected && selected.x === cell.x && selected.y === cell.y
@@ -792,38 +824,83 @@ function App() {
               </div>
             )
           })}
+          </div>
         </div>
       </div>
 
       <div className="action-row">
-        <button
-          className={`btn icon-action-btn confirm-btn${moveControlsInactive ? ' inactive-action' : ''}`}
-          disabled={!canConfirm}
-          onClick={() => void handleConfirm()}
-          aria-label="Confirm move"
-          title="Confirm move"
-        >
-          <span className="icon action-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" role="presentation">
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-          </span>
-        </button>
-        <button
-          className={`btn icon-action-btn clear-btn${moveControlsInactive ? ' inactive-action' : ''}`}
-          disabled={!canClear}
-          onClick={handleUndo}
-          aria-label="Clear selection"
-          title="Clear selection"
-        >
-          <span className="icon action-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" role="presentation">
-              <circle cx="12" cy="12" r="8.5" />
-              <path d="M7.5 16.5 16.5 7.5" />
-            </svg>
-          </span>
-        </button>
+        <div className="action-row-main">
+          <button
+            className={`btn icon-action-btn confirm-btn${moveControlsInactive ? ' inactive-action' : ''}`}
+            disabled={!canConfirm}
+            onClick={() => void handleConfirm()}
+            aria-label="Confirm move"
+            title="Confirm move"
+          >
+            <span className="icon action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </span>
+          </button>
+          <button
+            className={`btn icon-action-btn clear-btn${moveControlsInactive ? ' inactive-action' : ''}`}
+            disabled={!canClear}
+            onClick={handleUndo}
+            aria-label="Clear selection"
+            title="Clear selection"
+          >
+            <span className="icon action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <circle cx="12" cy="12" r="8.5" />
+                <path d="M7.5 16.5 16.5 7.5" />
+              </svg>
+            </span>
+          </button>
+        </div>
+
+        {(gameMode === 'online' || canResign) && (
+          <div className="action-row-controls" ref={controlsMenuRef}>
+            <button
+              className="btn secondary controls-menu-toggle"
+              type="button"
+              aria-label="Open game controls"
+              aria-expanded={controlsMenuOpen}
+              onClick={() => setControlsMenuOpen((open) => !open)}
+            >
+              <span className="icon controls-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="presentation">
+                  <path d="M5 7h14" />
+                  <path d="M5 12h14" />
+                  <path d="M5 17h14" />
+                  <circle cx="9" cy="7" r="1.6" fill="currentColor" stroke="none" />
+                  <circle cx="15" cy="12" r="1.6" fill="currentColor" stroke="none" />
+                  <circle cx="11" cy="17" r="1.6" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+            </button>
+            {controlsMenuOpen && (
+              <div className="controls-menu-sheet">
+                {gameMode === 'online' && !isOnlineDraft && (
+                  <button className="btn secondary controls-menu-btn" onClick={() => void handleCopyMatchLink()}>
+                    {copiedMatchLink ? 'Copied' : 'Copy Link'}
+                  </button>
+                )}
+                <button
+                  className="btn secondary controls-menu-btn"
+                  disabled={onlineBusy || !canResign}
+                  onClick={() => {
+                    setControlsMenuOpen(false)
+                    setResignPrompt(true)
+                  }}
+                >
+                  {showsDeleteAction ? 'Delete Match' : 'Resign Match'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {(gameMode === 'online' || canResign) && (
