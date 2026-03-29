@@ -1,4 +1,12 @@
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
+import {
+  getRedirectResult,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  type User,
+} from 'firebase/auth'
 import { auth, googleProvider } from '../firebase'
 
 export type AuthState = {
@@ -13,7 +21,21 @@ export function subscribeToAuth(callback: (state: AuthState) => void) {
   })
 }
 
+function prefersRedirectAuth() {
+  if (typeof navigator === 'undefined') return false
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+}
+
+export async function resolveRedirectSignIn() {
+  await getRedirectResult(auth)
+}
+
 export async function signInWithGoogle() {
+  if (prefersRedirectAuth()) {
+    await signInWithRedirect(auth, googleProvider)
+    return
+  }
+
   await signInWithPopup(auth, googleProvider)
 }
 
