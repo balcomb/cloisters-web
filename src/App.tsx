@@ -587,6 +587,12 @@ function App() {
 
     updateBoardSize()
 
+    const frameOne = window.requestAnimationFrame(updateBoardSize)
+    const frameTwo = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(updateBoardSize)
+    })
+    const timeout = window.setTimeout(updateBoardSize, 60)
+
     const observer = new ResizeObserver(() => {
       updateBoardSize()
     })
@@ -594,6 +600,9 @@ function App() {
     window.addEventListener('resize', updateBoardSize)
 
     return () => {
+      window.cancelAnimationFrame(frameOne)
+      window.cancelAnimationFrame(frameTwo)
+      window.clearTimeout(timeout)
       observer.disconnect()
       window.removeEventListener('resize', updateBoardSize)
     }
@@ -832,9 +841,8 @@ function App() {
           })}
           </div>
         </div>
-      </div>
 
-      <div className="action-row">
+      <div className={`action-row${gameMode === 'online' || canResign ? '' : ' centered-actions'}`}>
         <div className="action-row-main">
           <button
             className={`btn icon-action-btn confirm-btn${moveControlsInactive ? ' inactive-action' : ''}`}
@@ -880,9 +888,6 @@ function App() {
                   <path d="M5 7h14" />
                   <path d="M5 12h14" />
                   <path d="M5 17h14" />
-                  <circle cx="9" cy="7" r="1.6" fill="currentColor" stroke="none" />
-                  <circle cx="15" cy="12" r="1.6" fill="currentColor" stroke="none" />
-                  <circle cx="11" cy="17" r="1.6" fill="currentColor" stroke="none" />
                 </svg>
               </span>
             </button>
@@ -908,6 +913,9 @@ function App() {
           </div>
         )}
       </div>
+
+      </div>
+
 
       {(gameMode === 'online' || canResign) && (
         <div className="game-footer-actions">
