@@ -579,9 +579,21 @@ function App() {
     if (!element) return
 
     const updateBoardSize = () => {
-      const { width, height } = element.getBoundingClientRect()
+      const parent = element.parentElement
+      const availableWidth = parent ? parent.getBoundingClientRect().width : element.getBoundingClientRect().width
       const isCompactViewport = window.innerWidth <= 640
-      const nextSize = Math.max(0, Math.floor(isCompactViewport ? width : Math.min(width, height)))
+      const safeWidth = Math.floor(availableWidth)
+
+      if (safeWidth < 120) return
+
+      if (isCompactViewport) {
+        setBoardSize(Math.max(0, safeWidth))
+        return
+      }
+
+      const viewportTarget = window.innerHeight * 0.5
+      const clampedTarget = Math.min(600, Math.max(400, viewportTarget))
+      const nextSize = Math.max(0, Math.floor(Math.min(safeWidth, clampedTarget)))
       setBoardSize(nextSize)
     }
 
