@@ -842,7 +842,7 @@ function App() {
           </div>
         </div>
 
-      <div className={`action-row${gameMode === 'online' || canResign ? '' : ' centered-actions'}`}>
+        <div className={`action-row${gameMode === 'online' || canResign ? '' : ' centered-actions'}`}>
         <div className="action-row-main">
           <button
             className={`btn icon-action-btn confirm-btn${moveControlsInactive ? ' inactive-action' : ''}`}
@@ -912,10 +912,8 @@ function App() {
             )}
           </div>
         )}
+        </div>
       </div>
-
-      </div>
-
 
       {(gameMode === 'online' || canResign) && (
         <div className="game-footer-actions">
