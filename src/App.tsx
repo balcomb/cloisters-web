@@ -51,7 +51,7 @@ type ProfileTarget =
   | { mode: 'self'; uid: string; name: string | null; photoURL: string | null }
   | { mode: 'opponent'; uid: string; name: string | null; photoURL: string | null }
 type HeadToHeadTarget = { uid: string; name: string | null; photoURL: string | null } | null
-type AppRoute = { matchId: string | null }
+type AppRoute = { matchId: string | null; privacy: boolean }
 
 function App() {
   const [screen, setScreen] = useState<'home' | 'game'>('home')
@@ -63,6 +63,7 @@ function App() {
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('basic')
   const [lastMove, setLastMove] = useState<Position | null>(null)
   const [user, setUser] = useState<User | null>(null)
+  const [privacyOpen, setPrivacyOpen] = useState(() => getAppRoute(window.location.pathname).privacy)
   const [authLoading, setAuthLoading] = useState(true)
   const [resumePrompt, setResumePrompt] = useState<ResumePrompt>(null)
   const [signInPrompt, setSignInPrompt] = useState(false)
@@ -117,6 +118,13 @@ function App() {
   useEffect(() => {
     const syncRoute = () => {
       const route = getAppRoute(window.location.pathname)
+      setPrivacyOpen(route.privacy)
+      if (route.privacy) {
+        setCurrentOnlineMatchId(null)
+        setCurrentOnlineMatch(null)
+        setScreen('home')
+        return
+      }
       if (!route.matchId) {
         setCurrentOnlineMatchId(null)
         setCurrentOnlineMatch(null)
@@ -948,6 +956,89 @@ function App() {
     </div>
   )
 
+  const privacyView = (
+    <div className="home-content">
+      <main className="legal-layout">
+        <section className="panel legal-card">
+          <div className="legal-header">
+            <h1>Privacy Policy</h1>
+            <p>
+              Cloisters keeps privacy simple. This page explains what data the app stores and how
+              it is used.
+            </p>
+          </div>
+
+          <div className="legal-body">
+            <section>
+              <h2>Information We Store</h2>
+              <p>
+                If you sign in with Google, Cloisters stores your basic account identity: your
+                display name, email address, user ID, and profile photo.
+              </p>
+              <p>
+                Cloisters also stores gameplay data needed to run the app, including saved games,
+                online matches, public profile stats, leaderboard records, and match history.
+              </p>
+            </section>
+
+            <section>
+              <h2>How We Use It</h2>
+              <p>
+                Your data is used only to authenticate you, save progress, enable online play, show
+                profiles and leaderboards, and let you resume matches across devices.
+              </p>
+            </section>
+
+            <section>
+              <h2>What We Do Not Do</h2>
+              <p>
+                Cloisters does not sell your personal information and does not use your Google data
+                for advertising.
+              </p>
+            </section>
+
+            <section>
+              <h2>Third-Party Services</h2>
+              <p>
+                Cloisters uses Google Sign-In and Firebase services from Google to provide
+                authentication, data storage, hosting, and app infrastructure.
+              </p>
+            </section>
+
+            <section>
+              <h2>Your Choices</h2>
+              <p>
+                You can stop using Cloisters at any time. If you want account data removed, contact
+                the site operator and include the Google account you used to sign in.
+              </p>
+            </section>
+
+            <section>
+              <h2>Contact</h2>
+              <p>
+                For privacy questions or data removal requests, contact tokentrap.app@gmail.com.
+              </p>
+            </section>
+
+            <section>
+              <h2>Updates</h2>
+              <p>
+                This policy may be updated as Cloisters evolves. Material changes will be reflected
+                on this page.
+              </p>
+            </section>
+          </div>
+
+          <div className="legal-actions">
+            <button className="btn secondary" onClick={() => navigateHome()}>
+              Back to Home
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+  )
+
   return (
     <div className="app home">
       <header className="toolbar">
@@ -1011,12 +1102,11 @@ function App() {
         </div>
       </header>
 
-      <div className="home-content">
-        <header className="home-header simple">
-          <div />
-        </header>
-
-        <main className="home-layout">
+      {privacyOpen ? (
+        privacyView
+      ) : (
+        <div className="home-content">
+          <main className="home-layout">
           <section className="panel action-panel">
             <div className="play-section">
               <div className="play-section-header">
@@ -1154,8 +1244,15 @@ function App() {
               <p className="note">Sign in with Google to view your matches and join waiting games.</p>
             )}
           </section>
-        </main>
-      </div>
+          </main>
+
+          <div className="home-fine-print">
+            <button className="fine-print-link" onClick={() => navigateToPrivacy()}>
+              Privacy Policy
+            </button>
+          </div>
+        </div>
+      )}
 
       {screen === 'game' && (
         <div className="game-overlay" role="dialog" aria-modal="true">
@@ -1760,8 +1857,15 @@ function formatMatchDate(value: unknown) {
 }
 
 function getAppRoute(pathname: string): AppRoute {
+  if (pathname === '/privacy') return { matchId: null, privacy: true }
   const match = pathname.match(/^\/match\/([^/]+)$/)
-  return { matchId: match ? decodeURIComponent(match[1]) : null }
+  return { matchId: match ? decodeURIComponent(match[1]) : null, privacy: false }
+}
+
+function navigateToPrivacy(replace = false) {
+  if (window.location.pathname === '/privacy') return
+  window.history[replace ? 'replaceState' : 'pushState']({}, '', '/privacy')
+  window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
 function navigateToMatch(matchId: string, replace = false) {
@@ -1773,6 +1877,7 @@ function navigateToMatch(matchId: string, replace = false) {
 function navigateHome(replace = false) {
   if (window.location.pathname === '/') return
   window.history[replace ? 'replaceState' : 'pushState']({}, '', '/')
+  window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
 function formatMatchHistoryResult(match: OnlineMatchState, userId: string | null) {

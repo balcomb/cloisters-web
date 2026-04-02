@@ -209,15 +209,75 @@
   gap: 40px;
 }
 
-.home-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: 36px;
-  align-items: center;
+.home-fine-print {
+  display: flex;
+  justify-content: center;
 }
 
-.home-header.simple {
-  grid-template-columns: minmax(0, 1fr);
+.fine-print-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fine-print-link:hover {
+  color: var(--text);
+}
+
+.legal-layout {
+  display: flex;
+  justify-content: center;
+}
+
+.legal-card {
+  width: min(760px, 94vw);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.legal-header h1 {
+  margin: 0 0 10px;
+  font-size: 32px;
+}
+
+.legal-header p {
+  margin: 0;
+  max-width: 62ch;
+}
+
+.legal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.legal-body section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legal-body h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.legal-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.legal-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .home-actions {
@@ -1704,6 +1764,14 @@
 @media (max-width: 640px) {
   .match-card {
     padding: 18px;
+  }
+
+  .legal-card {
+    width: min(760px, calc(100vw - 32px));
+  }
+
+  .legal-header h1 {
+    font-size: 28px;
   }
 
   .profile-header,
