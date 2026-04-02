@@ -1128,7 +1128,7 @@ function App() {
                               />
                               <strong>{match.bluePlayer.displayName ?? 'Blue player'}</strong>
                             </span>
-                            <span className="match-card-status">Make a move to join</span>
+                            <span className="match-card-status">Join now</span>
                           </span>
                         </button>
                       ))}
@@ -1589,7 +1589,7 @@ function canPlayTurn(
 
 function getOnlineStatusText(match: OnlineMatchState | null, userId: string | null) {
   if (!match) return ''
-  if (match.status === 'waiting') return 'Waiting for opponent to join'
+  if (match.status === 'waiting') return 'Waiting for opponent'
   if (match.status === 'finished') {
     if (match.resignedBy) {
       const player = getOnlinePlayer(match, userId)

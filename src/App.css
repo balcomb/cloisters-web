@@ -484,6 +484,15 @@
 .modal-card.history-card {
   width: min(500px, 92vw);
   max-width: 500px;
+  max-height: min(82vh, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.history-card .how-to-body {
+  min-height: 0;
+  overflow: auto;
 }
 
 .profile-header {
@@ -608,6 +617,15 @@
   cursor: pointer;
 }
 
+.match-history-row strong {
+  font-size: 15px;
+}
+
+.match-history-row p,
+.match-history-row .profile-row-meta {
+  font-size: 14px;
+}
+
 .profile-row strong {
   display: block;
   margin-bottom: 4px;
@@ -697,7 +715,7 @@
 .match-card-bottom,
 .match-meta {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .match-card-identity {
@@ -708,6 +726,7 @@
 }
 
 .match-card-identity strong {
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -715,7 +734,7 @@
 
 .match-card-status {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 15px;
   white-space: nowrap;
   margin-left: auto;
 }
@@ -1683,6 +1702,10 @@
 }
 
 @media (max-width: 640px) {
+  .match-card {
+    padding: 18px;
+  }
+
   .profile-header,
   .profile-row {
     flex-direction: column;
