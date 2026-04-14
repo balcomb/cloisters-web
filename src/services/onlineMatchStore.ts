@@ -29,6 +29,7 @@ export type MatchPlayerProfile = {
   uid: string
   displayName: string | null
   photoURL: string | null
+  deleted?: boolean
 }
 
 export type OnlineMatchState = {
@@ -301,8 +302,8 @@ function withId(id: string, data: Record<string, unknown>): OnlineMatchState {
     id,
     joinCode: typeof data.joinCode === 'string' ? data.joinCode : '',
     status: isMatchStatus(data.status) ? data.status : 'waiting',
-    bluePlayer: data.bluePlayer as MatchPlayerProfile,
-    orangePlayer: (data.orangePlayer as MatchPlayerProfile | null) ?? null,
+    bluePlayer: parseMatchPlayerProfile(data.bluePlayer),
+    orangePlayer: data.orangePlayer ? parseMatchPlayerProfile(data.orangePlayer) : null,
     participantIds: Array.isArray(data.participantIds) ? (data.participantIds as string[]) : [],
     anchors: Array.isArray(data.anchors) ? (data.anchors as Anchor[]) : [],
     nextId: typeof data.nextId === 'number' ? data.nextId : 1,
@@ -333,6 +334,17 @@ function toProfile(user: FirebaseUserProfile): MatchPlayerProfile {
     uid: user.uid,
     displayName: user.displayName ?? null,
     photoURL: user.photoURL ?? null,
+    deleted: false,
+  }
+}
+
+function parseMatchPlayerProfile(value: unknown): MatchPlayerProfile {
+  const data = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  return {
+    uid: typeof data.uid === 'string' ? data.uid : '',
+    displayName: typeof data.displayName === 'string' ? data.displayName : null,
+    photoURL: typeof data.photoURL === 'string' ? data.photoURL : null,
+    deleted: data.deleted === true,
   }
 }
 

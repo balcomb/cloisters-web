@@ -7,7 +7,8 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
-import { auth, googleProvider } from '../firebase'
+import { httpsCallable } from 'firebase/functions'
+import { auth, functions, googleProvider } from '../firebase'
 
 export type AuthState = {
   user: User | null
@@ -37,6 +38,12 @@ export async function signInWithGoogle() {
   }
 
   await signInWithPopup(auth, googleProvider)
+}
+
+export async function deleteAccountAndData() {
+  const deleteCallable = httpsCallable(functions, 'deleteAccountAndData')
+  await deleteCallable()
+  await signOut(auth)
 }
 
 export async function signOutUser() {

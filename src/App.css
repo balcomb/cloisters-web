@@ -354,6 +354,21 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
+.avatar-ghost {
+  background: rgba(20, 24, 33, 0.08);
+  color: rgba(20, 24, 33, 0.7);
+}
+
+.avatar-ghost svg {
+  width: 75%;
+  height: 75%;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
 .home-main {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -602,6 +617,10 @@
 
 .profile-actions {
   padding-top: 4px;
+}
+
+.profile-actions .btn {
+  width: 100%;
 }
 
 .profile-section-header {
@@ -1311,6 +1330,11 @@
   background: transparent;
   border: 1px dashed rgba(0, 0, 0, 0.2);
   color: var(--text);
+}
+
+.btn.ghost.danger {
+  color: #8b2c2c;
+  border-color: rgba(139, 44, 44, 0.28);
 }
 
 .btn:hover {

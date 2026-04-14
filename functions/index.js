@@ -1,10 +1,14 @@
 const { onDocumentWritten } = require('firebase-functions/v2/firestore')
+const { HttpsError, onCall } = require('firebase-functions/v2/https')
 const { initializeApp } = require('firebase-admin/app')
-const { Timestamp, getFirestore } = require('firebase-admin/firestore')
+const { getAuth } = require('firebase-admin/auth')
+const { FieldValue, Timestamp, getFirestore } = require('firebase-admin/firestore')
 
 initializeApp()
 
 const db = getFirestore()
+const auth = getAuth()
+const DELETED_PLAYER_NAME = 'Deleted Player'
 
 exports.syncPublicProfilesOnMatchFinished = onDocumentWritten('matches/{matchId}', async (event) => {
   const beforeData = event.data?.before.exists ? event.data.before.data() : null
@@ -26,6 +30,65 @@ exports.syncPublicProfilesOnMatchFinished = onDocumentWritten('matches/{matchId}
   })
 })
 
+exports.deleteAccountAndData = onCall(async (request) => {
+  const uid = request.auth?.uid
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to delete your account.')
+  }
+
+  const deletedProfile = createDeletedProfile(uid)
+  const matchesSnap = await db.collection('matches').where('participantIds', 'array-contains', uid).get()
+  const writer = db.bulkWriter()
+
+  for (const matchDoc of matchesSnap.docs) {
+    const match = matchDoc.data()
+    const playerColor = getPlayerColorForUid(match, uid)
+    if (!playerColor) continue
+
+    if (match.status === 'waiting' && !match.orangePlayer && match.bluePlayer?.uid === uid) {
+      writer.delete(matchDoc.ref)
+      continue
+    }
+
+    const otherUid = playerColor === 'blue' ? match.orangePlayer?.uid ?? null : match.bluePlayer?.uid ?? null
+    const update = {
+      updatedAt: FieldValue.serverTimestamp(),
+      participantIds: otherUid ? [otherUid] : [],
+    }
+
+    if (playerColor === 'blue') {
+      update.bluePlayer = deletedProfile
+    } else {
+      update.orangePlayer = deletedProfile
+    }
+
+    if (match.status !== 'finished') {
+      update.status = 'finished'
+      update.winner = playerColor === 'blue' ? 'orange' : 'blue'
+      update.resignedBy = playerColor
+    }
+
+    writer.set(matchDoc.ref, update, { merge: true })
+  }
+
+  const userRoot = db.collection('users').doc(uid)
+  const botGamesSnap = await userRoot.collection('botGames').get()
+  botGamesSnap.forEach((docSnap) => writer.delete(docSnap.ref))
+
+  const offlineGamesSnap = await userRoot.collection('offlineGame').get()
+  offlineGamesSnap.forEach((docSnap) => writer.delete(docSnap.ref))
+
+  const profileRef = db.collection('publicProfiles').doc(uid)
+  const processedSnap = await profileRef.collection('processedMatches').get()
+  processedSnap.forEach((docSnap) => writer.delete(docSnap.ref))
+  writer.delete(profileRef)
+
+  await writer.close()
+  await auth.deleteUser(uid)
+
+  return { success: true }
+})
+
 function buildPlayerResult(matchId, player, match, playedAt) {
   const profile = player === 'blue' ? match.bluePlayer : match.orangePlayer
   const opponent = player === 'blue' ? match.orangePlayer : match.bluePlayer
@@ -43,6 +106,8 @@ function buildPlayerResult(matchId, player, match, playedAt) {
 }
 
 async function applyProfileResult(transaction, result) {
+  if (!result.profile || result.profile.deleted) return
+
   const profileRef = db.doc(`publicProfiles/${result.profile.uid}`)
   const markerRef = profileRef.collection('processedMatches').doc(result.matchId)
 
@@ -54,7 +119,7 @@ async function applyProfileResult(transaction, result) {
   const recentResult = {
     matchId: result.matchId,
     opponentUid: result.opponent.uid,
-    opponentName: result.opponent.displayName || 'Opponent',
+    opponentName: result.opponent.deleted ? DELETED_PLAYER_NAME : result.opponent.displayName || 'Opponent',
     outcome: result.outcome,
     method: result.method,
     playedAt: result.playedAt,
@@ -110,4 +175,19 @@ function getEmptyPublicProfile(profile) {
     completedMatches: 0,
     recentResults: [],
   }
+}
+
+function createDeletedProfile(uid) {
+  return {
+    uid,
+    displayName: DELETED_PLAYER_NAME,
+    photoURL: null,
+    deleted: true,
+  }
+}
+
+function getPlayerColorForUid(match, uid) {
+  if (match.bluePlayer?.uid === uid) return 'blue'
+  if (match.orangePlayer?.uid === uid) return 'orange'
+  return null
 }

@@ -25,6 +25,7 @@ import {
   subscribeToOnlineMatch,
   subscribeToUserMatches,
   subscribeToWaitingMatches,
+  type MatchPlayerProfile,
   type OnlineMatchState,
 } from './services/onlineMatchStore'
 import {
@@ -33,7 +34,13 @@ import {
   syncPublicProfileIdentity,
   type PublicProfile,
 } from './services/publicProfileStore'
-import { resolveRedirectSignIn, signInWithGoogle, signOutUser, subscribeToAuth } from './services/auth'
+import {
+  deleteAccountAndData,
+  resolveRedirectSignIn,
+  signInWithGoogle,
+  signOutUser,
+  subscribeToAuth,
+} from './services/auth'
 import type { User } from 'firebase/auth'
 import cloistersLogo from './assets/cloisters-logo.svg'
 import './App.css'
@@ -99,6 +106,10 @@ function App() {
   const [headToHeadHistoryOpen, setHeadToHeadHistoryOpen] = useState(false)
   const [headToHeadTarget, setHeadToHeadTarget] = useState<HeadToHeadTarget>(null)
   const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null)
+  const [deletedPlayerNoticeOpen, setDeletedPlayerNoticeOpen] = useState(false)
+  const [deleteAccountPrompt, setDeleteAccountPrompt] = useState(false)
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false)
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null)
   const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
   const [leaderboardProfiles, setLeaderboardProfiles] = useState<PublicProfile[]>([])
   const boardWrapRef = useRef<HTMLDivElement | null>(null)
@@ -170,6 +181,9 @@ function App() {
         setResignPrompt(false)
         setHowToOpen(false)
         setProfileTarget(null)
+        setDeletedPlayerNoticeOpen(false)
+        setDeleteAccountPrompt(false)
+        setDeleteAccountError(null)
         setPublicProfile(null)
       }
     })
@@ -565,6 +579,41 @@ function App() {
     setScreen('home')
   }
 
+  const openPlayerDetails = (player: MatchPlayerProfile | null) => {
+    if (!player) return
+    if (isDeletedPlayer(player)) {
+      setDeletedPlayerNoticeOpen(true)
+      return
+    }
+    setProfileTarget({
+      mode: 'opponent',
+      uid: player.uid,
+      name: player.displayName,
+      photoURL: player.photoURL,
+    })
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeleteAccountBusy(true)
+    setDeleteAccountError(null)
+    try {
+      await deleteAccountAndData()
+      setDeleteAccountPrompt(false)
+      setProfileTarget(null)
+      setDeletedPlayerNoticeOpen(false)
+      navigateHome(true)
+      setScreen('home')
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message && error.message.toLowerCase() !== 'internal'
+          ? error.message
+          : "Sorry, something went wrong. We couldn't delete this account."
+      setDeleteAccountError(message)
+    } finally {
+      setDeleteAccountBusy(false)
+    }
+  }
+
   useEffect(() => {
     if (isOver || activePlayer !== 'orange') return
     if (gameMode !== 'bot') return
@@ -739,20 +788,14 @@ function App() {
               {currentOpponent?.uid === currentOnlineMatch.bluePlayer.uid ? (
                 <button
                   className="avatar-button score-avatar-button"
-                  aria-label={`Open ${currentOnlineMatch.bluePlayer.displayName ?? 'opponent'} profile`}
-                  onClick={() =>
-                    setProfileTarget({
-                      mode: 'opponent',
-                      uid: currentOnlineMatch.bluePlayer.uid,
-                      name: currentOnlineMatch.bluePlayer.displayName,
-                      photoURL: currentOnlineMatch.bluePlayer.photoURL,
-                    })
-                  }
+                  aria-label={`Open ${getPlayerDisplayName(currentOnlineMatch.bluePlayer).toLowerCase()} profile`}
+                  onClick={() => openPlayerDetails(currentOnlineMatch.bluePlayer)}
                 >
                   <AvatarImage
                     className="avatar score-avatar"
                     name={currentOnlineMatch.bluePlayer.displayName}
                     photoURL={currentOnlineMatch.bluePlayer.photoURL}
+                    deleted={currentOnlineMatch.bluePlayer.deleted}
                   />
                 </button>
               ) : (
@@ -761,6 +804,7 @@ function App() {
                     className="avatar score-avatar"
                     name={currentOnlineMatch.bluePlayer.displayName}
                     photoURL={currentOnlineMatch.bluePlayer.photoURL}
+                    deleted={currentOnlineMatch.bluePlayer.deleted}
                   />
                   <span className="score-you-pill">You</span>
                 </div>
@@ -780,20 +824,14 @@ function App() {
               {currentOpponent?.uid === currentOnlineMatch.orangePlayer.uid ? (
                 <button
                   className="avatar-button score-avatar-button"
-                  aria-label={`Open ${currentOnlineMatch.orangePlayer.displayName ?? 'opponent'} profile`}
-                  onClick={() =>
-                    setProfileTarget({
-                      mode: 'opponent',
-                      uid: currentOnlineMatch.orangePlayer!.uid,
-                      name: currentOnlineMatch.orangePlayer!.displayName,
-                      photoURL: currentOnlineMatch.orangePlayer!.photoURL,
-                    })
-                  }
+                  aria-label={`Open ${getPlayerDisplayName(currentOnlineMatch.orangePlayer).toLowerCase()} profile`}
+                  onClick={() => openPlayerDetails(currentOnlineMatch.orangePlayer)}
                 >
                   <AvatarImage
                     className="avatar score-avatar"
                     name={currentOnlineMatch.orangePlayer.displayName}
                     photoURL={currentOnlineMatch.orangePlayer.photoURL}
+                    deleted={currentOnlineMatch.orangePlayer.deleted}
                   />
                 </button>
               ) : (
@@ -802,6 +840,7 @@ function App() {
                     className="avatar score-avatar"
                     name={currentOnlineMatch.orangePlayer.displayName}
                     photoURL={currentOnlineMatch.orangePlayer.photoURL}
+                    deleted={currentOnlineMatch.orangePlayer.deleted}
                   />
                   <span className="score-you-pill">You</span>
                 </div>
@@ -1008,15 +1047,18 @@ function App() {
             <section>
               <h2>Your Choices</h2>
               <p>
-                You can stop using Cloisters at any time. If you want account data removed, contact
-                the site operator and include the Google account you used to sign in.
+                You can stop using Cloisters at any time. You can also delete your account from
+                the profile panel. Account deletion removes your saved games and public profile,
+                resigns any in-progress online matches, and anonymizes completed match history as
+                Deleted Player.
               </p>
             </section>
 
             <section>
               <h2>Contact</h2>
               <p>
-                For privacy questions or data removal requests, contact tokentrap.app@gmail.com.
+                For privacy questions or help with account data, contact
+                tokentrap.app@gmail.com.
               </p>
             </section>
 
@@ -1179,6 +1221,7 @@ function App() {
                                   className="avatar match-avatar"
                                   name={getMatchCardName(match, user)}
                                   photoURL={getMatchCardPhotoURL(match, user.uid)}
+                                  deleted={getMatchCardDeleted(match, user.uid)}
                                 />
                                 <strong>{getMatchCardName(match, user)}</strong>
                               </span>
@@ -1215,8 +1258,9 @@ function App() {
                                 className="avatar match-avatar"
                                 name={match.bluePlayer.displayName}
                                 photoURL={match.bluePlayer.photoURL}
+                                deleted={match.bluePlayer.deleted}
                               />
-                              <strong>{match.bluePlayer.displayName ?? 'Blue player'}</strong>
+                              <strong>{getPlayerDisplayName(match.bluePlayer, 'Blue player')}</strong>
                             </span>
                             <span className="match-card-status">Join now</span>
                           </span>
@@ -1429,6 +1473,44 @@ function App() {
         </div>
       )}
 
+      {deleteAccountPrompt && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => !deleteAccountBusy && setDeleteAccountPrompt(false)} />
+          <div className="modal-card">
+            <h2>Delete account?</h2>
+            <p>
+              This will delete your Cloisters account, remove your saved games and public profile,
+              resign any in-progress online matches, and anonymize your completed match history as
+              Deleted Player.
+            </p>
+            {deleteAccountError && <p className="inline-message error">{deleteAccountError}</p>}
+            <div className="modal-actions">
+              <button className="btn secondary" disabled={deleteAccountBusy} onClick={() => void handleDeleteAccount()}>
+                {deleteAccountBusy ? 'Deleting...' : 'Delete account'}
+              </button>
+              <button className="btn ghost" disabled={deleteAccountBusy} onClick={() => setDeleteAccountPrompt(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletedPlayerNoticeOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-backdrop" onClick={() => setDeletedPlayerNoticeOpen(false)} />
+          <div className="modal-card">
+            <h2>Account unavailable</h2>
+            <p>This player no longer has an account.</p>
+            <div className="modal-actions">
+              <button className="btn secondary" onClick={() => setDeletedPlayerNoticeOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {historyOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-backdrop" onClick={() => setHistoryOpen(false)} />
@@ -1533,6 +1615,16 @@ function App() {
                     <button className="btn ghost" onClick={() => signOutUser()}>
                       Sign out
                     </button>
+                    <button
+                      className="btn ghost danger"
+                      onClick={() => {
+                        setDeleteAccountError(null)
+                        setProfileTarget(null)
+                        setDeleteAccountPrompt(true)
+                      }}
+                    >
+                      Delete account
+                    </button>
                   </section>
                 </>
               ) : (
@@ -1628,6 +1720,30 @@ function App() {
   )
 }
 
+function isDeletedPlayer(player: MatchPlayerProfile | null | undefined) {
+  return Boolean(player?.deleted)
+}
+
+function getPlayerDisplayName(
+  player: Pick<MatchPlayerProfile, 'displayName' | 'deleted'> | null | undefined,
+  fallback = 'Opponent'
+) {
+  if (!player) return fallback
+  if (player.deleted) return 'Deleted Player'
+  return player.displayName ?? fallback
+}
+
+function GhostIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="8" strokeDasharray="2.2 4" />
+      <circle cx="9.25" cy="10" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="14.75" cy="10" r="0.8" fill="currentColor" stroke="none" />
+      <path d="M9.25 14h5.5" />
+    </svg>
+  )
+}
+
 function getInitials(name?: string | null) {
   if (!name) return 'P'
   const parts = name.trim().split(/\s+/)
@@ -1639,16 +1755,30 @@ function AvatarImage({
   className,
   name,
   photoURL,
+  deleted = false,
 }: {
   className: string
   name?: string | null
   photoURL?: string | null
+  deleted?: boolean
 }) {
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     setFailed(false)
   }, [photoURL])
+
+  if (deleted) {
+    return (
+      <span
+        className={`${className} avatar-fallback avatar-ghost`}
+        aria-label="Deleted player avatar"
+        title="This player no longer has an account."
+      >
+        <GhostIcon />
+      </span>
+    )
+  }
 
   if (!photoURL || failed) {
     return <span className={`${className} avatar-fallback`}>{getInitials(name)}</span>
@@ -1707,9 +1837,9 @@ function getOnlineStatusText(match: OnlineMatchState | null, userId: string | nu
 
 function describeOpponent(match: OnlineMatchState, userId: string) {
   const player = getOnlinePlayer(match, userId)
-  if (player === 'blue') return match.orangePlayer?.displayName ?? 'Waiting for opponent'
-  if (player === 'orange') return match.bluePlayer.displayName ?? 'Blue player'
-  return `${match.bluePlayer.displayName ?? 'Blue player'} vs ${match.orangePlayer?.displayName ?? 'Orange player'}`
+  if (player === 'blue') return getPlayerDisplayName(match.orangePlayer, 'Waiting for opponent')
+  if (player === 'orange') return getPlayerDisplayName(match.bluePlayer, 'Blue player')
+  return `${getPlayerDisplayName(match.bluePlayer, 'Blue player')} vs ${getPlayerDisplayName(match.orangePlayer, 'Orange player')}`
 }
 
 function getMatchCardName(match: OnlineMatchState, user: User | null) {
@@ -1734,6 +1864,18 @@ function getMatchCardPhotoURL(match: OnlineMatchState, userId: string | null) {
     return match.bluePlayer.photoURL
   }
   return getOpponent(match, userId ?? '')?.photoURL ?? null
+}
+
+function getMatchCardDeleted(match: OnlineMatchState, userId: string | null) {
+  if (
+    userId &&
+    match.status === 'waiting' &&
+    match.bluePlayer.uid === userId &&
+    !match.orangePlayer
+  ) {
+    return match.bluePlayer.deleted === true
+  }
+  return getOpponent(match, userId ?? '')?.deleted === true
 }
 
 function buildPlayerProfile(
@@ -1781,7 +1923,7 @@ function buildPlayerProfile(
 
     const existing = headToHead.get(opponent.uid) ?? {
       uid: opponent.uid,
-      name: opponent.displayName ?? 'Opponent',
+      name: getPlayerDisplayName(opponent),
       wins: 0,
       losses: 0,
       draws: 0,
@@ -1806,7 +1948,7 @@ function buildPlayerProfile(
     .filter((match) => match.status === 'active')
     .map((match) => ({
       id: match.id,
-      opponentName: getOpponent(match, userId)?.displayName ?? 'Opponent',
+      opponentName: getPlayerDisplayName(getOpponent(match, userId)),
       statusText: getOnlineStatusText(match, userId),
       dateText: formatMatchDate(match.updatedAt),
     }))
