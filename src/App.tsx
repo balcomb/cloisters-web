@@ -58,7 +58,7 @@ type ProfileTarget =
   | { mode: 'self'; uid: string; name: string | null; photoURL: string | null }
   | { mode: 'opponent'; uid: string; name: string | null; photoURL: string | null }
 type HeadToHeadTarget = { uid: string; name: string | null; photoURL: string | null } | null
-type AppRoute = { matchId: string | null; privacy: boolean }
+type AppRoute = { matchId: string | null; page: 'home' | 'privacy' | 'support' }
 
 function App() {
   const [screen, setScreen] = useState<'home' | 'game'>('home')
@@ -70,7 +70,7 @@ function App() {
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('basic')
   const [lastMove, setLastMove] = useState<Position | null>(null)
   const [user, setUser] = useState<User | null>(null)
-  const [privacyOpen, setPrivacyOpen] = useState(() => getAppRoute(window.location.pathname).privacy)
+  const [legalPage, setLegalPage] = useState<"home" | "privacy" | "support">(() => getAppRoute(window.location.pathname).page)
   const [authLoading, setAuthLoading] = useState(true)
   const [resumePrompt, setResumePrompt] = useState<ResumePrompt>(null)
   const [signInPrompt, setSignInPrompt] = useState(false)
@@ -129,8 +129,8 @@ function App() {
   useEffect(() => {
     const syncRoute = () => {
       const route = getAppRoute(window.location.pathname)
-      setPrivacyOpen(route.privacy)
-      if (route.privacy) {
+      setLegalPage(route.page)
+      if (route.page !== 'home') {
         setCurrentOnlineMatchId(null)
         setCurrentOnlineMatch(null)
         setScreen('home')
@@ -1081,6 +1081,43 @@ function App() {
     </div>
   )
 
+  const supportView = (
+    <div className="home-content">
+      <main className="legal-layout">
+        <section className="panel legal-card">
+          <div className="legal-header">
+            <h1>Support</h1>
+            <p>
+              If you need help with Cloisters, have questions about your account, or want to report
+              a problem, please get in touch.
+            </p>
+          </div>
+
+          <div className="legal-body">
+            <section>
+              <h2>Contact</h2>
+              <p>For support requests, email tokentrap.app@gmail.com.</p>
+            </section>
+
+            <section>
+              <h2>What to Include</h2>
+              <p>
+                If you are reporting a sign-in, saved game, or online match issue, include a short
+                description of what happened and the Google account you used to sign in.
+              </p>
+            </section>
+          </div>
+
+          <div className="legal-actions">
+            <button className="btn secondary" onClick={() => navigateHome()}>
+              Back to Home
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+  )
+
   return (
     <div className="app home">
       <header className="toolbar">
@@ -1144,8 +1181,10 @@ function App() {
         </div>
       </header>
 
-      {privacyOpen ? (
+      {legalPage === 'privacy' ? (
         privacyView
+      ) : legalPage === 'support' ? (
+        supportView
       ) : (
         <div className="home-content">
           <main className="home-layout">
@@ -1293,6 +1332,10 @@ function App() {
           <div className="home-fine-print">
             <button className="fine-print-link" onClick={() => navigateToPrivacy()}>
               Privacy Policy
+            </button>
+            <span className="fine-print-separator" aria-hidden="true">•</span>
+            <button className="fine-print-link" onClick={() => navigateToSupport()}>
+              Support
             </button>
           </div>
         </div>
@@ -1999,14 +2042,21 @@ function formatMatchDate(value: unknown) {
 }
 
 function getAppRoute(pathname: string): AppRoute {
-  if (pathname === '/privacy') return { matchId: null, privacy: true }
+  if (pathname === '/privacy') return { matchId: null, page: 'privacy' }
+  if (pathname === '/support') return { matchId: null, page: 'support' }
   const match = pathname.match(/^\/match\/([^/]+)$/)
-  return { matchId: match ? decodeURIComponent(match[1]) : null, privacy: false }
+  return { matchId: match ? decodeURIComponent(match[1]) : null, page: 'home' }
 }
 
 function navigateToPrivacy(replace = false) {
   if (window.location.pathname === '/privacy') return
   window.history[replace ? 'replaceState' : 'pushState']({}, '', '/privacy')
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
+function navigateToSupport(replace = false) {
+  if (window.location.pathname === '/support') return
+  window.history[replace ? 'replaceState' : 'pushState']({}, '', '/support')
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
